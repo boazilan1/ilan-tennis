@@ -7,6 +7,7 @@ import Activities from './pages/Activities'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Register from './pages/Register'
+import Admin from './pages/Admin'
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/admin" element={<Admin />} />
           </Routes>
           <Footer />
         </div>
