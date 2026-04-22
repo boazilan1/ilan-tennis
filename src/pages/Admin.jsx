@@ -9,6 +9,9 @@ const DAYS_HE = {
 }
 const DAYS_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
+// מיפוי מספר יום JS (0=ראשון) לשם אנגלי
+const JS_DAY_TO_KEY = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
 const STATUS_LABELS = {
   pending:   { label: 'ממתין לתשלום', color: '#f59e0b', bg: '#fffbeb' },
   active:    { label: 'שילם ✓',       color: '#16a34a', bg: '#f0fdf4' },
@@ -46,6 +49,7 @@ export default function Admin() {
         {[
           { key: 'enrollments', label: 'הרשמות' },
           { key: 'activities',  label: 'ניהול חוגים' },
+          { key: 'calendar',    label: 'יומן' },
         ].map(t => (
           <button
             key={t.key}
@@ -65,6 +69,7 @@ export default function Admin() {
 
       {tab === 'enrollments' && <EnrollmentsTab />}
       {tab === 'activities'  && <ActivitiesTab />}
+      {tab === 'calendar'    && <CalendarTab />}
     </main>
   )
 }
@@ -448,3 +453,277 @@ function ActivitiesTab() {
 
 const labelStyle = { display: 'block', marginBottom: '5px', fontSize: '14px', color: '#333', fontWeight: '500' }
 const inputStyle = { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '15px', boxSizing: 'border-box', background: '#fff' }
+
+/* ─── טאב יומן ─── */
+function CalendarTab() {
+  const [weekOffset, setWeekOffset] = useState(0) // 0 = שבוע נוכחי
+  const [activities, setActivities] = useState([])
+  const [selected, setSelected] = useState(null) // { activity, date }
+  const [enrollments, setEnrollments] = useState([]) // שחקנים רשומים לפעילות הנבחרת
+  const [attendance, setAttendance] = useState({}) // { player_id: present }
+  const [saving, setSaving] = useState(false)
+  const [loadingSession, setLoadingSession] = useState(false)
+
+  useEffect(() => { fetchActivities() }, [])
+
+  async function fetchActivities() {
+    const { data } = await supabase.from('activities').select('*')
+    if (data) setActivities(data)
+  }
+
+  // חישוב ימי השבוע הנבחר
+  function getWeekDays() {
+    const today = new Date()
+    const day = today.getDay() // 0=ראשון
+    const sunday = new Date(today)
+    sunday.setDate(today.getDate() - day + weekOffset * 7)
+    return DAYS_ORDER.map((key, i) => {
+      const d = new Date(sunday)
+      d.setDate(sunday.getDate() + i)
+      return { key, date: d }
+    })
+  }
+
+  const weekDays = getWeekDays()
+  const weekLabel = (() => {
+    const start = weekDays[0].date
+    const end = weekDays[6].date
+    return `${start.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })} – ${end.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' })}`
+  })()
+
+  function formatDate(date) {
+    return date.toISOString().split('T')[0] // YYYY-MM-DD
+  }
+
+  function isToday(date) {
+    return formatDate(date) === formatDate(new Date())
+  }
+
+  async function openSession(activity, date) {
+    setSelected({ activity, date })
+    setLoadingSession(true)
+    setEnrollments([])
+    setAttendance({})
+
+    const dateStr = formatDate(date)
+
+    const [enrollRes, attendRes] = await Promise.all([
+      supabase
+        .from('enrollments')
+        .select('player_id, player:players(id, name, birth_year)')
+        .eq('activity_id', activity.id)
+        .eq('status', 'active'),
+      supabase
+        .from('attendance')
+        .select('player_id, present')
+        .eq('activity_id', activity.id)
+        .eq('date', dateStr),
+    ])
+
+    if (enrollRes.data) setEnrollments(enrollRes.data)
+    if (attendRes.data) {
+      const map = {}
+      attendRes.data.forEach(r => { map[r.player_id] = r.present })
+      setAttendance(map)
+    }
+    setLoadingSession(false)
+  }
+
+  async function toggleAttendance(playerId) {
+    const dateStr = formatDate(selected.date)
+    const current = attendance[playerId]
+    const newVal = current === undefined ? true : !current
+
+    setAttendance(prev => ({ ...prev, [playerId]: newVal }))
+
+    // upsert לפי player_id + activity_id + date
+    await supabase.from('attendance').upsert(
+      { player_id: playerId, activity_id: selected.activity.id, date: dateStr, present: newVal },
+      { onConflict: 'player_id,activity_id,date' }
+    )
+  }
+
+  async function saveAll() {
+    setSaving(true)
+    const dateStr = formatDate(selected.date)
+    const rows = enrollments.map(e => ({
+      player_id: e.player_id,
+      activity_id: selected.activity.id,
+      date: dateStr,
+      present: attendance[e.player_id] ?? false,
+    }))
+    await supabase.from('attendance').upsert(rows, { onConflict: 'player_id,activity_id,date' })
+    setSaving(false)
+  }
+
+  const presentCount = selected ? enrollments.filter(e => attendance[e.player_id] === true).length : 0
+
+  return (
+    <div style={{ display: 'flex', gap: '24px' }}>
+      {/* עמודת יומן */}
+      <div style={{ flex: 1 }}>
+        {/* ניווט שבוע */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <button onClick={() => { setWeekOffset(w => w - 1); setSelected(null) }}
+            style={navBtn}>◀ שבוע קודם</button>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontWeight: 'bold', color: '#1a472a', fontSize: '16px' }}>{weekLabel}</div>
+            {weekOffset !== 0 && (
+              <button onClick={() => { setWeekOffset(0); setSelected(null) }}
+                style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' }}>
+                חזרה לשבוע נוכחי
+              </button>
+            )}
+          </div>
+          <button onClick={() => { setWeekOffset(w => w + 1); setSelected(null) }}
+            style={navBtn}>שבוע הבא ▶</button>
+        </div>
+
+        {/* ימי השבוע */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {weekDays.map(({ key, date }) => {
+            const dayActivities = activities.filter(a => a.day_of_week === key)
+            const today = isToday(date)
+            const isPast = date < new Date() && !today
+
+            return (
+              <div key={key} style={{
+                background: today ? '#f0fdf4' : '#fff',
+                border: today ? '2px solid #1a472a' : '1px solid #e5e5e5',
+                borderRadius: '10px',
+                padding: '12px 16px',
+                opacity: isPast ? 0.7 : 1,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: dayActivities.length ? '10px' : 0 }}>
+                  <div style={{ minWidth: '80px' }}>
+                    <div style={{ fontWeight: 'bold', color: today ? '#1a472a' : '#333', fontSize: '15px' }}>
+                      יום {DAYS_HE[key]}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#888' }}>
+                      {date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}
+                      {today && <span style={{ color: '#1a472a', fontWeight: 'bold' }}> • היום</span>}
+                    </div>
+                  </div>
+                  {dayActivities.length === 0 && (
+                    <span style={{ color: '#ccc', fontSize: '13px' }}>אין פעילויות</span>
+                  )}
+                </div>
+
+                {dayActivities.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {dayActivities.map(act => {
+                      const isSelected = selected?.activity.id === act.id && formatDate(selected?.date) === formatDate(date)
+                      return (
+                        <button
+                          key={act.id}
+                          onClick={() => openSession(act, date)}
+                          style={{
+                            background: isSelected ? '#1a472a' : '#e8f5e9',
+                            color: isSelected ? '#fff' : '#1a472a',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '8px 14px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: 'bold',
+                            textAlign: 'right',
+                          }}
+                        >
+                          <div>{act.name}</div>
+                          <div style={{ fontWeight: 'normal', fontSize: '12px', opacity: 0.85 }}>🕐 {act.time}</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* פאנל נוכחות */}
+      {selected && (
+        <div style={{
+          width: '300px', flexShrink: 0,
+          background: '#fff', borderRadius: '12px',
+          border: '2px solid #1a472a',
+          padding: '20px', alignSelf: 'flex-start',
+          position: 'sticky', top: '20px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div>
+              <div style={{ fontWeight: 'bold', color: '#1a472a', fontSize: '16px' }}>{selected.activity.name}</div>
+              <div style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>
+                {selected.date.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </div>
+            </div>
+            <button onClick={() => setSelected(null)}
+              style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#888', lineHeight: 1 }}>
+              ✕
+            </button>
+          </div>
+
+          {loadingSession ? (
+            <p style={{ color: '#888', textAlign: 'center', padding: '20px 0' }}>טוען...</p>
+          ) : enrollments.length === 0 ? (
+            <p style={{ color: '#aaa', textAlign: 'center', padding: '20px 0', fontSize: '14px' }}>
+              אין תלמידים פעילים רשומים לחוג זה
+            </p>
+          ) : (
+            <>
+              <div style={{ fontSize: '13px', color: '#888', marginBottom: '12px' }}>
+                נוכחים: <strong style={{ color: '#16a34a' }}>{presentCount}</strong> / {enrollments.length}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+                {enrollments.map(e => {
+                  const present = attendance[e.player_id]
+                  return (
+                    <button
+                      key={e.player_id}
+                      onClick={() => toggleAttendance(e.player_id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#f9f9f9',
+                        border: `1px solid ${present === true ? '#16a34a' : present === false ? '#dc2626' : '#ddd'}`,
+                        borderRadius: '8px', padding: '10px 12px',
+                        cursor: 'pointer', textAlign: 'right', width: '100%',
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', minWidth: '24px' }}>
+                        {present === true ? '✅' : present === false ? '❌' : '⬜'}
+                      </span>
+                      <div>
+                        <div style={{ fontWeight: '500', fontSize: '14px', color: '#1a1a1a' }}>{e.player?.name}</div>
+                        <div style={{ fontSize: '12px', color: '#888' }}>יליד {e.player?.birth_year}</div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <button
+                onClick={saveAll}
+                disabled={saving}
+                style={{
+                  width: '100%', background: '#1a472a', color: '#fff',
+                  border: 'none', borderRadius: '8px', padding: '10px',
+                  fontSize: '14px', fontWeight: 'bold', cursor: 'pointer',
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                {saving ? 'שומר...' : 'שמור נוכחות'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const navBtn = {
+  background: '#fff', border: '1px solid #ddd', borderRadius: '8px',
+  padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#333',
+}
