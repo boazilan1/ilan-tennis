@@ -244,6 +244,8 @@ function TraineesTab() {
   const [addForm, setAddForm] = useState({ name: '', birth_year: '', notes: '' })
   const [addError, setAddError] = useState('')
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', birth_year: '', notes: '' })
 
   useEffect(() => { fetchPlayers() }, [])
 
@@ -282,6 +284,24 @@ function TraineesTab() {
     setAddForm({ name: '', birth_year: '', notes: '' })
     setShowAddForm(false)
     setAdding(false)
+  }
+
+  function startEdit(p) {
+    setEditingId(p.id)
+    setEditForm({ name: p.name, birth_year: String(p.birth_year), notes: p.notes || '' })
+    setShowAddForm(false)
+  }
+
+  async function saveEdit(playerId) {
+    const year = parseInt(editForm.birth_year)
+    if (!editForm.name.trim() || !year) return
+    await supabase.from('players').update({
+      name: editForm.name.trim(), birth_year: year, notes: editForm.notes.trim() || null,
+    }).eq('id', playerId)
+    setPlayers(prev => prev.map(p => p.id === playerId
+      ? { ...p, name: editForm.name.trim(), birth_year: year, notes: editForm.notes.trim() || null }
+      : p))
+    setEditingId(null)
   }
 
   const filtered = players.filter(p => {
@@ -387,38 +407,63 @@ function TraineesTab() {
             const activeEnroll = p.enrollments?.filter(e => e.status === 'active') || []
             const pendingEnroll = p.enrollments?.filter(e => e.status === 'pending') || []
             return (
-              <div key={p.id} style={{
-                background: '#fff', borderRadius: '10px', padding: '14px 18px',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
-                borderRight: `4px solid ${stInfo.color}`,
-                display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 2fr auto',
-                alignItems: 'center', gap: '12px',
-              }}>
-                <div>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{p.name}</div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>יליד {p.birth_year}</div>
-                  {p.notes && <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>📝 {p.notes}</div>}
-                </div>
-                <div>
-                  <div style={{ fontSize: '14px', color: '#333' }}>{p.profile?.full_name || '—'}</div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>{p.profile?.phone || ''}</div>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {activeEnroll.map((e, i) => (
-                    <span key={i} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '5px', padding: '2px 7px', fontSize: '11px', fontWeight: '500' }}>
-                      {e.activity?.name}
-                    </span>
-                  ))}
-                  {pendingEnroll.map((e, i) => (
-                    <span key={i} style={{ background: '#fffbeb', color: '#f59e0b', border: '1px solid #fde68a', borderRadius: '5px', padding: '2px 7px', fontSize: '11px' }}>
-                      {e.activity?.name} ⏳
-                    </span>
-                  ))}
-                  {p.enrollments?.length === 0 && <span style={{ color: '#ccc', fontSize: '12px' }}>אין חוגים</span>}
-                </div>
-                <div style={{ background: stInfo.bg, color: stInfo.color, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
-                  {stInfo.label}
-                </div>
+              <div key={p.id} style={{ background: '#fff', borderRadius: '10px', boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderRight: `4px solid ${stInfo.color}`, overflow: 'hidden' }}>
+                {/* שורה רגילה */}
+                {editingId !== p.id ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 2fr auto auto', alignItems: 'center', gap: '12px', padding: '14px 18px' }}>
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{p.name}</div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>יליד {p.birth_year}</div>
+                      {p.notes && <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>📝 {p.notes}</div>}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '14px', color: '#333' }}>{p.profile?.full_name || '—'}</div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>{p.profile?.phone || ''}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                      {activeEnroll.map((e, i) => (
+                        <span key={i} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '5px', padding: '2px 7px', fontSize: '11px', fontWeight: '500' }}>{e.activity?.name}</span>
+                      ))}
+                      {pendingEnroll.map((e, i) => (
+                        <span key={i} style={{ background: '#fffbeb', color: '#f59e0b', border: '1px solid #fde68a', borderRadius: '5px', padding: '2px 7px', fontSize: '11px' }}>{e.activity?.name} ⏳</span>
+                      ))}
+                      {p.enrollments?.length === 0 && <span style={{ color: '#ccc', fontSize: '12px' }}>אין חוגים</span>}
+                    </div>
+                    <div style={{ background: stInfo.bg, color: stInfo.color, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{stInfo.label}</div>
+                    <button onClick={() => startEdit(p)}
+                      style={{ background: '#fff', color: '#1a472a', border: '1px solid #1a472a', borderRadius: '6px', padding: '5px 12px', cursor: 'pointer', fontSize: '13px', whiteSpace: 'nowrap' }}>
+                      עריכה
+                    </button>
+                  </div>
+                ) : (
+                  /* טופס עריכה inline */
+                  <div style={{ padding: '14px 18px', background: '#f0fdf4', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={labelStyle}>שם מלא</label>
+                        <input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>שנת לידה</label>
+                        <input type="number" value={editForm.birth_year} onChange={e => setEditForm(f => ({ ...f, birth_year: e.target.value }))} style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>הערות</label>
+                        <input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                      <button onClick={() => setEditingId(null)}
+                        style={{ background: '#fff', color: '#666', border: '1px solid #ccc', borderRadius: '7px', padding: '6px 16px', cursor: 'pointer', fontSize: '13px' }}>
+                        ביטול
+                      </button>
+                      <button onClick={() => saveEdit(p.id)}
+                        style={{ background: '#1a472a', color: '#fff', border: 'none', borderRadius: '7px', padding: '6px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
+                        שמור
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -704,7 +749,9 @@ function CalendarTab() {
   const [loadingEventPlayers, setLoadingEventPlayers] = useState(false)
   const [savingEventPlayers, setSavingEventPlayers] = useState(false)
   const [playerSearch, setPlayerSearch] = useState('')
-  const [playerFilter, setPlayerFilter] = useState('all') // all | selected | active
+  const [eventRoster, setEventRoster] = useState(new Set()) // player_ids in selected event roster
+  const [rosterForm, setRosterForm] = useState({}) // { player_id: true } for form selection
+  const [rosterSearch, setRosterSearch] = useState('')
   // add / edit form
   const [showEventForm, setShowEventForm] = useState(false)
   const [editingEvent, setEditingEvent] = useState(null) // null = new, else event obj
@@ -777,15 +824,16 @@ function CalendarTab() {
     setShowDeleteOptions(false)
     setEventNotes(ev.notes || '')
     setEventStatus(ev.status || 'scheduled')
-    // טען מתאמנים לאירוע זה + תאריך
     setLoadingEventPlayers(true)
-    const { data } = await supabase
-      .from('admin_event_players')
-      .select('player_id, present')
-      .eq('event_id', ev.id)
-      .eq('event_date', formatDate(date))
+    // טען רוסטר + נוכחות לתאריך זה
+    const [rosterRes, attendRes] = await Promise.all([
+      supabase.from('admin_event_roster').select('player_id').eq('event_id', ev.id),
+      supabase.from('admin_event_players').select('player_id, present').eq('event_id', ev.id).eq('event_date', formatDate(date)),
+    ])
+    const roster = new Set((rosterRes.data || []).map(r => r.player_id))
+    setEventRoster(roster)
     const map = {}
-    if (data) data.forEach(r => { map[r.player_id] = r.present })
+    if (attendRes.data) attendRes.data.forEach(r => { map[r.player_id] = r.present })
     setEventPlayerMap(map)
     setLoadingEventPlayers(false)
   }
@@ -860,17 +908,23 @@ function CalendarTab() {
     setDeletingEvent(false)
   }
 
-  function openAddForm() {
-    setEditingEvent(null)
-    setEventForm(EMPTY_EVENT_FORM)
-    setShowEventForm(true)
-    setSelected(null)
-  }
-
-  function openEditForm(ev) {
+  async function openEditForm(ev) {
     setEditingEvent(ev)
     setEventForm(eventFormFromData(ev))
     setShowEventForm(true)
+    // טען רוסטר קיים לטופס
+    const { data } = await supabase.from('admin_event_roster').select('player_id').eq('event_id', ev.id)
+    const map = {}
+    if (data) data.forEach(r => { map[r.player_id] = true })
+    setRosterForm(map)
+  }
+
+  function openAddForm() {
+    setEditingEvent(null)
+    setEventForm(EMPTY_EVENT_FORM)
+    setRosterForm({})
+    setShowEventForm(true)
+    setSelected(null)
   }
 
   async function submitEventForm(e) {
@@ -884,19 +938,34 @@ function CalendarTab() {
       event_date: !eventForm.is_recurring ? eventForm.event_date || null : null,
       time: eventForm.time.trim() || null,
     }
+    const selectedPlayerIds = Object.entries(rosterForm).filter(([, v]) => v).map(([id]) => id)
+
+    let eventId
     if (editingEvent) {
       await supabase.from('admin_events').update(payload).eq('id', editingEvent.id)
       setAdminEvents(prev => prev.map(ev => ev.id === editingEvent.id ? { ...ev, ...payload } : ev))
-      if (selected?.data?.id === editingEvent.id) {
+      if (selected?.data?.id === editingEvent.id)
         setSelected(prev => ({ ...prev, data: { ...prev.data, ...payload } }))
-      }
+      eventId = editingEvent.id
     } else {
       const { data } = await supabase.from('admin_events').insert({ ...payload, status: 'scheduled' }).select().single()
-      if (data) setAdminEvents(prev => [...prev, data])
+      if (data) { setAdminEvents(prev => [...prev, data]); eventId = data.id }
     }
+
+    // שמור רוסטר: מחק ישן + הכנס חדש
+    if (eventId) {
+      await supabase.from('admin_event_roster').delete().eq('event_id', eventId)
+      if (selectedPlayerIds.length > 0) {
+        await supabase.from('admin_event_roster').insert(
+          selectedPlayerIds.map(pid => ({ event_id: eventId, player_id: pid }))
+        )
+      }
+    }
+
     setShowEventForm(false)
     setEditingEvent(null)
     setEventForm(EMPTY_EVENT_FORM)
+    setRosterForm({})
   }
 
   const presentCount = selected?.type === 'activity'
@@ -971,6 +1040,34 @@ function CalendarTab() {
                 <input value={eventForm.time} onChange={e => setEventForm(f => ({ ...f, time: e.target.value }))} placeholder="09:00" style={inputStyle} />
               </div>
             </div>
+
+            {/* בחירת מתאמנים לרוסטר */}
+            <div style={{ marginTop: '16px', borderTop: '1px solid #e9d5ff', paddingTop: '14px' }}>
+              <label style={{ ...labelStyle, marginBottom: '8px', color: '#7c3aed' }}>
+                מתאמנים באירוע ({Object.values(rosterForm).filter(Boolean).length} נבחרו)
+              </label>
+              <input
+                value={rosterSearch} onChange={e => setRosterSearch(e.target.value)}
+                placeholder="חיפוש שם..."
+                style={{ ...inputStyle, fontSize: '13px', marginBottom: '8px' }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '180px', overflowY: 'auto' }}>
+                {allPlayers.filter(p => !rosterSearch || p.name.includes(rosterSearch)).map(p => (
+                  <label key={p.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: rosterForm[p.id] ? '#faf5ff' : '#fff',
+                    border: `1px solid ${rosterForm[p.id] ? '#c4b5fd' : '#e5e5e5'}`,
+                    borderRadius: '7px', padding: '7px 10px', cursor: 'pointer',
+                  }}>
+                    <input type="checkbox" checked={!!rosterForm[p.id]}
+                      onChange={e => setRosterForm(f => ({ ...f, [p.id]: e.target.checked }))} />
+                    <span style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</span>
+                    <span style={{ fontSize: '11px', color: '#aaa' }}>יליד {p.birth_year}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
               <button type="button" onClick={() => { setShowEventForm(false); setEditingEvent(null) }}
                 style={{ background: '#fff', color: '#666', border: '1px solid #ccc', borderRadius: '8px', padding: '8px 18px', cursor: 'pointer' }}>
@@ -1160,61 +1257,43 @@ function CalendarTab() {
                 </label>
                 {loadingEventPlayers ? (
                   <p style={{ color: '#888', fontSize: '13px' }}>טוען...</p>
-                ) : allPlayers.length === 0 ? (
-                  <p style={{ color: '#aaa', fontSize: '13px' }}>אין שחקנים במערכת</p>
+                ) : eventRoster.size === 0 ? (
+                  <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center' }}>
+                    לא הוגדרו מתאמנים לאירוע זה.
+                    <br />לחץ "עריכת פרטי האירוע" כדי להוסיף.
+                  </p>
                 ) : (() => {
-                  const visiblePlayers = allPlayers.filter(p => {
-                    const matchSearch = !playerSearch || p.name.includes(playerSearch)
-                    if (playerFilter === 'selected') return matchSearch && eventPlayerMap[p.id] === true
-                    return matchSearch
-                  })
+                  const rosterPlayers = allPlayers.filter(p => eventRoster.has(p.id) &&
+                    (!playerSearch || p.name.includes(playerSearch)))
                   return (
                     <>
-                      {/* חיפוש + פילטר */}
-                      <input
-                        value={playerSearch}
-                        onChange={e => setPlayerSearch(e.target.value)}
+                      <input value={playerSearch} onChange={e => setPlayerSearch(e.target.value)}
                         placeholder="חיפוש שם..."
-                        style={{ width: '100%', padding: '7px 10px', borderRadius: '7px', border: '1px solid #ccc', fontSize: '13px', boxSizing: 'border-box', marginBottom: '6px' }}
-                      />
-                      <div style={{ display: 'flex', gap: '5px', marginBottom: '8px' }}>
-                        {[
-                          { key: 'all',      label: `הכל (${allPlayers.length})` },
-                          { key: 'selected', label: `נבחרו (${eventPresentCount})` },
-                        ].map(f => (
-                          <button key={f.key} onClick={() => setPlayerFilter(f.key)} style={{
-                            flex: 1, background: playerFilter === f.key ? '#1a472a' : '#f0f0f0',
-                            color: playerFilter === f.key ? '#fff' : '#444',
-                            border: 'none', borderRadius: '6px', padding: '5px', fontSize: '12px', cursor: 'pointer',
-                          }}>{f.label}</button>
-                        ))}
-                      </div>
-
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '7px', border: '1px solid #ccc', fontSize: '13px', boxSizing: 'border-box', marginBottom: '8px' }} />
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px', maxHeight: '220px', overflowY: 'auto' }}>
-                        {visiblePlayers.length === 0
-                          ? <p style={{ color: '#aaa', fontSize: '12px', textAlign: 'center' }}>אין תוצאות</p>
-                          : visiblePlayers.map(p => {
-                            const present = eventPlayerMap[p.id]
-                            return (
-                              <button key={p.id} onClick={() => toggleEventPlayer(p.id)} style={{
-                                display: 'flex', alignItems: 'center', gap: '8px',
-                                background: present === true ? '#f0fdf4' : '#f9f9f9',
-                                border: `1px solid ${present === true ? '#16a34a' : '#ddd'}`,
-                                borderRadius: '7px', padding: '7px 10px', cursor: 'pointer', textAlign: 'right', width: '100%',
-                              }}>
-                                <span style={{ fontSize: '16px', minWidth: '20px' }}>{present === true ? '✅' : '⬜'}</span>
-                                <div>
-                                  <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</div>
-                                  <div style={{ fontSize: '11px', color: '#888' }}>יליד {p.birth_year}</div>
-                                </div>
-                              </button>
-                            )
-                          })
-                        }
+                        {rosterPlayers.map(p => {
+                          const present = eventPlayerMap[p.id]
+                          return (
+                            <button key={p.id} onClick={() => toggleEventPlayer(p.id)} style={{
+                              display: 'flex', alignItems: 'center', gap: '8px',
+                              background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#f9f9f9',
+                              border: `1px solid ${present === true ? '#16a34a' : present === false ? '#dc2626' : '#ddd'}`,
+                              borderRadius: '7px', padding: '7px 10px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                            }}>
+                              <span style={{ fontSize: '16px', minWidth: '20px' }}>
+                                {present === true ? '✅' : present === false ? '❌' : '⬜'}
+                              </span>
+                              <div>
+                                <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</div>
+                                <div style={{ fontSize: '11px', color: '#888' }}>יליד {p.birth_year}</div>
+                              </div>
+                            </button>
+                          )
+                        })}
                       </div>
                       <button onClick={saveEventPlayers} disabled={savingEventPlayers}
                         style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', opacity: savingEventPlayers ? 0.6 : 1 }}>
-                        {savingEventPlayers ? 'שומר...' : 'שמור נוכחות מתאמנים'}
+                        {savingEventPlayers ? 'שומר...' : 'שמור נוכחות'}
                       </button>
                     </>
                   )
