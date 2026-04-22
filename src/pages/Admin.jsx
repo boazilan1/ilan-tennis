@@ -46,6 +46,7 @@ export default function Admin() {
       <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', borderBottom: '2px solid #e0e0e0' }}>
         {[
           { key: 'enrollments', label: 'הרשמות' },
+          { key: 'trainees',    label: 'מתאמנים' },
           { key: 'activities',  label: 'ניהול חוגים' },
           { key: 'calendar',    label: 'יומן' },
         ].map(t => (
@@ -66,6 +67,7 @@ export default function Admin() {
       </div>
 
       {tab === 'enrollments' && <EnrollmentsTab />}
+      {tab === 'trainees'    && <TraineesTab />}
       {tab === 'activities'  && <ActivitiesTab />}
       {tab === 'calendar'    && <CalendarTab />}
     </main>
@@ -207,6 +209,148 @@ function EnrollmentsTab() {
                       שחזר
                     </button>
                   )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── טאב מתאמנים ─── */
+function TraineesTab() {
+  const [players, setPlayers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+
+  useEffect(() => { fetchPlayers() }, [])
+
+  async function fetchPlayers() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('players')
+      .select('id, name, birth_year, notes, user_id, profile:profiles!players_user_id_fkey(full_name, phone), enrollments(status, activity:activities(name, day_of_week, time))')
+      .order('name')
+    if (data) setPlayers(data)
+    setLoading(false)
+  }
+
+  // סטטוס כולל של מתאמן לפי ההרשמות שלו
+  function overallStatus(enrollments) {
+    if (!enrollments || enrollments.length === 0) return 'none'
+    if (enrollments.some(e => e.status === 'active')) return 'active'
+    if (enrollments.some(e => e.status === 'pending')) return 'pending'
+    return 'cancelled'
+  }
+
+  const STATUS_TRAINEE = {
+    active:    { label: 'פעיל',            color: '#16a34a', bg: '#f0fdf4' },
+    pending:   { label: 'ממתין לתשלום',   color: '#f59e0b', bg: '#fffbeb' },
+    cancelled: { label: 'בוטל',            color: '#dc2626', bg: '#fef2f2' },
+    none:      { label: 'לא רשום לחוג',   color: '#888',    bg: '#f5f5f5' },
+  }
+
+  const filtered = players.filter(p => {
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      p.profile?.phone?.includes(search)
+    const st = overallStatus(p.enrollments)
+    const matchStatus = filterStatus === 'all' || st === filterStatus
+    return matchSearch && matchStatus
+  })
+
+  const counts = {
+    all: players.length,
+    active: players.filter(p => overallStatus(p.enrollments) === 'active').length,
+    pending: players.filter(p => overallStatus(p.enrollments) === 'pending').length,
+    cancelled: players.filter(p => overallStatus(p.enrollments) === 'cancelled').length,
+    none: players.filter(p => overallStatus(p.enrollments) === 'none').length,
+  }
+
+  if (loading) return <p style={{ color: '#888', textAlign: 'center', padding: '40px' }}>טוען...</p>
+
+  return (
+    <div>
+      {/* סטטיסטיקות + פילטר */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        {[
+          { key: 'all',       label: 'הכל',             color: '#1a472a' },
+          { key: 'active',    label: 'פעילים',          color: '#16a34a' },
+          { key: 'pending',   label: 'ממתינים',         color: '#f59e0b' },
+          { key: 'cancelled', label: 'בוטלו',           color: '#dc2626' },
+          { key: 'none',      label: 'לא רשומים לחוג', color: '#888' },
+        ].map(({ key, label, color }) => (
+          <button key={key} onClick={() => setFilterStatus(key)} style={{
+            background: filterStatus === key ? color : '#fff',
+            color: filterStatus === key ? '#fff' : color,
+            border: `1px solid ${color}`,
+            borderRadius: '20px', padding: '6px 14px', cursor: 'pointer',
+            fontSize: '13px', fontWeight: 'bold',
+          }}>
+            {label} ({counts[key]})
+          </button>
+        ))}
+      </div>
+
+      {/* חיפוש */}
+      <input
+        value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="🔍 חיפוש לפי שם מתאמן, שם הורה או טלפון..."
+        style={{ ...inputStyle, marginBottom: '16px', fontSize: '14px' }}
+      />
+
+      {/* רשימה */}
+      {filtered.length === 0 ? (
+        <p style={{ color: '#888', textAlign: 'center', padding: '40px' }}>לא נמצאו מתאמנים</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {filtered.map(p => {
+            const st = overallStatus(p.enrollments)
+            const stInfo = STATUS_TRAINEE[st]
+            const activeEnrollments = p.enrollments?.filter(e => e.status === 'active') || []
+            const pendingEnrollments = p.enrollments?.filter(e => e.status === 'pending') || []
+            return (
+              <div key={p.id} style={{
+                background: '#fff', borderRadius: '10px', padding: '14px 18px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                borderRight: `4px solid ${stInfo.color}`,
+                display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 2fr auto',
+                alignItems: 'center', gap: '12px',
+              }}>
+                {/* מתאמן */}
+                <div>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{p.name}</div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>יליד {p.birth_year}</div>
+                  {p.notes && <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>📝 {p.notes}</div>}
+                </div>
+
+                {/* הורה */}
+                <div>
+                  <div style={{ fontSize: '14px', color: '#333' }}>{p.profile?.full_name || '—'}</div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>{p.profile?.phone || ''}</div>
+                </div>
+
+                {/* חוגים */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {activeEnrollments.map((e, i) => (
+                    <span key={i} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '5px', padding: '2px 7px', fontSize: '11px', fontWeight: '500' }}>
+                      {e.activity?.name}
+                    </span>
+                  ))}
+                  {pendingEnrollments.map((e, i) => (
+                    <span key={i} style={{ background: '#fffbeb', color: '#f59e0b', border: '1px solid #fde68a', borderRadius: '5px', padding: '2px 7px', fontSize: '11px' }}>
+                      {e.activity?.name} ⏳
+                    </span>
+                  ))}
+                  {p.enrollments?.length === 0 && <span style={{ color: '#ccc', fontSize: '12px' }}>אין חוגים</span>}
+                </div>
+
+                {/* סטטוס */}
+                <div style={{ background: stInfo.bg, color: stInfo.color, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                  {stInfo.label}
                 </div>
               </div>
             )
@@ -492,6 +636,8 @@ function CalendarTab() {
   const [eventPlayerMap, setEventPlayerMap] = useState({}) // player_id → present
   const [loadingEventPlayers, setLoadingEventPlayers] = useState(false)
   const [savingEventPlayers, setSavingEventPlayers] = useState(false)
+  const [playerSearch, setPlayerSearch] = useState('')
+  const [playerFilter, setPlayerFilter] = useState('all') // all | selected | active
   // add / edit form
   const [showEventForm, setShowEventForm] = useState(false)
   const [editingEvent, setEditingEvent] = useState(null) // null = new, else event obj
@@ -949,35 +1095,63 @@ function CalendarTab() {
                   <p style={{ color: '#888', fontSize: '13px' }}>טוען...</p>
                 ) : allPlayers.length === 0 ? (
                   <p style={{ color: '#aaa', fontSize: '13px' }}>אין שחקנים במערכת</p>
-                ) : (
-                  <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px', maxHeight: '200px', overflowY: 'auto' }}>
-                      {allPlayers.map(p => {
-                        const present = eventPlayerMap[p.id]
-                        return (
-                          <button key={p.id} onClick={() => toggleEventPlayer(p.id)} style={{
-                            display: 'flex', alignItems: 'center', gap: '8px',
-                            background: present === true ? '#f0fdf4' : '#f9f9f9',
-                            border: `1px solid ${present === true ? '#16a34a' : '#ddd'}`,
-                            borderRadius: '7px', padding: '7px 10px', cursor: 'pointer', textAlign: 'right', width: '100%',
-                          }}>
-                            <span style={{ fontSize: '16px', minWidth: '20px' }}>
-                              {present === true ? '✅' : '⬜'}
-                            </span>
-                            <div>
-                              <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</div>
-                              <div style={{ fontSize: '11px', color: '#888' }}>יליד {p.birth_year}</div>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <button onClick={saveEventPlayers} disabled={savingEventPlayers}
-                      style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', opacity: savingEventPlayers ? 0.6 : 1 }}>
-                      {savingEventPlayers ? 'שומר...' : 'שמור נוכחות מתאמנים'}
-                    </button>
-                  </>
-                )}
+                ) : (() => {
+                  const visiblePlayers = allPlayers.filter(p => {
+                    const matchSearch = !playerSearch || p.name.includes(playerSearch)
+                    if (playerFilter === 'selected') return matchSearch && eventPlayerMap[p.id] === true
+                    return matchSearch
+                  })
+                  return (
+                    <>
+                      {/* חיפוש + פילטר */}
+                      <input
+                        value={playerSearch}
+                        onChange={e => setPlayerSearch(e.target.value)}
+                        placeholder="חיפוש שם..."
+                        style={{ width: '100%', padding: '7px 10px', borderRadius: '7px', border: '1px solid #ccc', fontSize: '13px', boxSizing: 'border-box', marginBottom: '6px' }}
+                      />
+                      <div style={{ display: 'flex', gap: '5px', marginBottom: '8px' }}>
+                        {[
+                          { key: 'all',      label: `הכל (${allPlayers.length})` },
+                          { key: 'selected', label: `נבחרו (${eventPresentCount})` },
+                        ].map(f => (
+                          <button key={f.key} onClick={() => setPlayerFilter(f.key)} style={{
+                            flex: 1, background: playerFilter === f.key ? '#1a472a' : '#f0f0f0',
+                            color: playerFilter === f.key ? '#fff' : '#444',
+                            border: 'none', borderRadius: '6px', padding: '5px', fontSize: '12px', cursor: 'pointer',
+                          }}>{f.label}</button>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px', maxHeight: '220px', overflowY: 'auto' }}>
+                        {visiblePlayers.length === 0
+                          ? <p style={{ color: '#aaa', fontSize: '12px', textAlign: 'center' }}>אין תוצאות</p>
+                          : visiblePlayers.map(p => {
+                            const present = eventPlayerMap[p.id]
+                            return (
+                              <button key={p.id} onClick={() => toggleEventPlayer(p.id)} style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: present === true ? '#f0fdf4' : '#f9f9f9',
+                                border: `1px solid ${present === true ? '#16a34a' : '#ddd'}`,
+                                borderRadius: '7px', padding: '7px 10px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                              }}>
+                                <span style={{ fontSize: '16px', minWidth: '20px' }}>{present === true ? '✅' : '⬜'}</span>
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</div>
+                                  <div style={{ fontSize: '11px', color: '#888' }}>יליד {p.birth_year}</div>
+                                </div>
+                              </button>
+                            )
+                          })
+                        }
+                      </div>
+                      <button onClick={saveEventPlayers} disabled={savingEventPlayers}
+                        style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', opacity: savingEventPlayers ? 0.6 : 1 }}>
+                        {savingEventPlayers ? 'שומר...' : 'שמור נוכחות מתאמנים'}
+                      </button>
+                    </>
+                  )
+                })()}
               </div>
 
               {/* מחיקה */}
