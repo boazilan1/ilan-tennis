@@ -220,46 +220,77 @@ function EnrollmentsTab() {
 }
 
 /* ─── טאב מתאמנים ─── */
+const STATUS_TRAINEE = {
+  active:    { label: 'פעיל',           color: '#16a34a', bg: '#f0fdf4' },
+  pending:   { label: 'ממתין לתשלום',  color: '#f59e0b', bg: '#fffbeb' },
+  cancelled: { label: 'בוטל',           color: '#dc2626', bg: '#fef2f2' },
+  none:      { label: 'לא רשום לחוג',  color: '#888',    bg: '#f5f5f5' },
+}
+
+function overallStatus(enrollments) {
+  if (!enrollments || enrollments.length === 0) return 'none'
+  if (enrollments.some(e => e.status === 'active')) return 'active'
+  if (enrollments.some(e => e.status === 'pending')) return 'pending'
+  return 'cancelled'
+}
+
 function TraineesTab() {
+  const { user } = useAuth()
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [addForm, setAddForm] = useState({ name: '', birth_year: '', notes: '' })
+  const [addError, setAddError] = useState('')
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => { fetchPlayers() }, [])
 
   async function fetchPlayers() {
     setLoading(true)
-    const { data } = await supabase
-      .from('players')
-      .select('id, name, birth_year, notes, user_id, profile:profiles!players_user_id_fkey(full_name, phone), enrollments(status, activity:activities(name, day_of_week, time))')
-      .order('name')
-    if (data) setPlayers(data)
+    // שתי שאילתות נפרדות כדי להימנע מבעיות FK join
+    const [playerRes, profileRes] = await Promise.all([
+      supabase.from('players')
+        .select('id, name, birth_year, notes, user_id, enrollments(status, activity:activities(name))')
+        .order('name'),
+      supabase.from('profiles').select('id, full_name, phone'),
+    ])
+    if (playerRes.data && profileRes.data) {
+      const profileMap = {}
+      profileRes.data.forEach(p => { profileMap[p.id] = p })
+      setPlayers(playerRes.data.map(p => ({ ...p, profile: profileMap[p.user_id] || null })))
+    }
     setLoading(false)
   }
 
-  // סטטוס כולל של מתאמן לפי ההרשמות שלו
-  function overallStatus(enrollments) {
-    if (!enrollments || enrollments.length === 0) return 'none'
-    if (enrollments.some(e => e.status === 'active')) return 'active'
-    if (enrollments.some(e => e.status === 'pending')) return 'pending'
-    return 'cancelled'
-  }
-
-  const STATUS_TRAINEE = {
-    active:    { label: 'פעיל',            color: '#16a34a', bg: '#f0fdf4' },
-    pending:   { label: 'ממתין לתשלום',   color: '#f59e0b', bg: '#fffbeb' },
-    cancelled: { label: 'בוטל',            color: '#dc2626', bg: '#fef2f2' },
-    none:      { label: 'לא רשום לחוג',   color: '#888',    bg: '#f5f5f5' },
+  async function handleAdd(e) {
+    e.preventDefault()
+    setAddError('')
+    if (!addForm.name.trim()) { setAddError('יש להזין שם'); return }
+    const year = parseInt(addForm.birth_year)
+    if (!year || year < 1940 || year > new Date().getFullYear()) {
+      setAddError('שנת לידה לא תקינה'); return
+    }
+    setAdding(true)
+    const { data, error } = await supabase.from('players')
+      .insert({ name: addForm.name.trim(), birth_year: year, notes: addForm.notes.trim() || null, user_id: user.id })
+      .select().single()
+    if (error) { setAddError('שגיאה בהוספה'); setAdding(false); return }
+    setPlayers(prev => [...prev, { ...data, enrollments: [], profile: null }]
+      .sort((a, b) => a.name.localeCompare('he', b.name)))
+    setAddForm({ name: '', birth_year: '', notes: '' })
+    setShowAddForm(false)
+    setAdding(false)
   }
 
   const filtered = players.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch = !search ||
+      p.name.includes(search) ||
+      p.profile?.full_name?.includes(search) ||
       p.profile?.phone?.includes(search)
     const st = overallStatus(p.enrollments)
-    const matchStatus = filterStatus === 'all' || st === filterStatus
-    return matchSearch && matchStatus
+    return matchSearch && (filterStatus === 'all' || st === filterStatus)
   })
 
   const counts = {
@@ -274,20 +305,64 @@ function TraineesTab() {
 
   return (
     <div>
-      {/* סטטיסטיקות + פילטר */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      {/* כותרת + כפתור הוספה */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <span style={{ color: '#555', fontSize: '14px' }}>סה"כ {players.length} מתאמנים</span>
+        <button onClick={() => { setShowAddForm(f => !f); setAddError('') }}
+          style={{ background: '#1a472a', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+          {showAddForm ? 'סגור' : '+ הוסף מתאמן'}
+        </button>
+      </div>
+
+      {/* טופס הוספת מתאמן */}
+      {showAddForm && (
+        <form onSubmit={handleAdd} style={{ background: '#f0fdf4', border: '2px solid #1a472a', borderRadius: '12px', padding: '20px', marginBottom: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <h3 style={{ margin: 0, color: '#1a472a' }}>הוספת מתאמן חדש</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={labelStyle}>שם מלא *</label>
+              <input value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="שם פרטי ושם משפחה" style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>שנת לידה *</label>
+              <input type="number" value={addForm.birth_year} onChange={e => setAddForm(f => ({ ...f, birth_year: e.target.value }))}
+                placeholder="2015" min="1940" max={new Date().getFullYear()} style={inputStyle} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>הערות (אופציונלי)</label>
+              <input value={addForm.notes} onChange={e => setAddForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="רמה, בעיות בריאות וכו'" style={inputStyle} />
+            </div>
+          </div>
+          {addError && <p style={{ margin: 0, color: '#c00', fontSize: '13px' }}>{addError}</p>}
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={() => setShowAddForm(false)}
+              style={{ background: '#fff', color: '#666', border: '1px solid #ccc', borderRadius: '8px', padding: '8px 18px', cursor: 'pointer' }}>
+              ביטול
+            </button>
+            <button type="submit" disabled={adding}
+              style={{ background: '#1a472a', color: '#fff', border: 'none', borderRadius: '8px', padding: '8px 20px', cursor: 'pointer', fontWeight: 'bold', opacity: adding ? 0.6 : 1 }}>
+              {adding ? 'מוסיף...' : 'הוסף'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* פילטר סטטוס */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
         {[
-          { key: 'all',       label: 'הכל',             color: '#1a472a' },
-          { key: 'active',    label: 'פעילים',          color: '#16a34a' },
-          { key: 'pending',   label: 'ממתינים',         color: '#f59e0b' },
-          { key: 'cancelled', label: 'בוטלו',           color: '#dc2626' },
-          { key: 'none',      label: 'לא רשומים לחוג', color: '#888' },
+          { key: 'all',       label: 'הכל',            color: '#1a472a' },
+          { key: 'active',    label: 'פעילים',         color: '#16a34a' },
+          { key: 'pending',   label: 'ממתינים',        color: '#f59e0b' },
+          { key: 'cancelled', label: 'בוטלו',          color: '#dc2626' },
+          { key: 'none',      label: 'לא רשומים',      color: '#888' },
         ].map(({ key, label, color }) => (
           <button key={key} onClick={() => setFilterStatus(key)} style={{
             background: filterStatus === key ? color : '#fff',
             color: filterStatus === key ? '#fff' : color,
             border: `1px solid ${color}`,
-            borderRadius: '20px', padding: '6px 14px', cursor: 'pointer',
+            borderRadius: '20px', padding: '5px 14px', cursor: 'pointer',
             fontSize: '13px', fontWeight: 'bold',
           }}>
             {label} ({counts[key]})
@@ -296,9 +371,8 @@ function TraineesTab() {
       </div>
 
       {/* חיפוש */}
-      <input
-        value={search} onChange={e => setSearch(e.target.value)}
-        placeholder="🔍 חיפוש לפי שם מתאמן, שם הורה או טלפון..."
+      <input value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="🔍 חיפוש לפי שם, הורה או טלפון..."
         style={{ ...inputStyle, marginBottom: '16px', fontSize: '14px' }}
       />
 
@@ -310,8 +384,8 @@ function TraineesTab() {
           {filtered.map(p => {
             const st = overallStatus(p.enrollments)
             const stInfo = STATUS_TRAINEE[st]
-            const activeEnrollments = p.enrollments?.filter(e => e.status === 'active') || []
-            const pendingEnrollments = p.enrollments?.filter(e => e.status === 'pending') || []
+            const activeEnroll = p.enrollments?.filter(e => e.status === 'active') || []
+            const pendingEnroll = p.enrollments?.filter(e => e.status === 'pending') || []
             return (
               <div key={p.id} style={{
                 background: '#fff', borderRadius: '10px', padding: '14px 18px',
@@ -320,35 +394,28 @@ function TraineesTab() {
                 display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 2fr auto',
                 alignItems: 'center', gap: '12px',
               }}>
-                {/* מתאמן */}
                 <div>
                   <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{p.name}</div>
                   <div style={{ fontSize: '12px', color: '#888' }}>יליד {p.birth_year}</div>
                   {p.notes && <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>📝 {p.notes}</div>}
                 </div>
-
-                {/* הורה */}
                 <div>
                   <div style={{ fontSize: '14px', color: '#333' }}>{p.profile?.full_name || '—'}</div>
                   <div style={{ fontSize: '12px', color: '#888' }}>{p.profile?.phone || ''}</div>
                 </div>
-
-                {/* חוגים */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {activeEnrollments.map((e, i) => (
+                  {activeEnroll.map((e, i) => (
                     <span key={i} style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: '5px', padding: '2px 7px', fontSize: '11px', fontWeight: '500' }}>
                       {e.activity?.name}
                     </span>
                   ))}
-                  {pendingEnrollments.map((e, i) => (
+                  {pendingEnroll.map((e, i) => (
                     <span key={i} style={{ background: '#fffbeb', color: '#f59e0b', border: '1px solid #fde68a', borderRadius: '5px', padding: '2px 7px', fontSize: '11px' }}>
                       {e.activity?.name} ⏳
                     </span>
                   ))}
                   {p.enrollments?.length === 0 && <span style={{ color: '#ccc', fontSize: '12px' }}>אין חוגים</span>}
                 </div>
-
-                {/* סטטוס */}
                 <div style={{ background: stInfo.bg, color: stInfo.color, borderRadius: '6px', padding: '4px 10px', fontSize: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                   {stInfo.label}
                 </div>
