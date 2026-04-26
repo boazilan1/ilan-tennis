@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import TournamentsTab from './AdminTournaments'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -43,7 +44,8 @@ export default function Admin() {
     { key: 'enrollments', label: 'הרשמות' },
     { key: 'trainees',    label: 'מתאמנים' },
     { key: 'activities',  label: 'חוגים' },
-    { key: 'calendar',    label: 'יומן' },
+    { key: 'calendar',     label: 'יומן' },
+    { key: 'tournaments',  label: 'תחרויות' },
   ]
 
   return (
@@ -83,6 +85,7 @@ export default function Admin() {
         {tab === 'trainees'    && <TraineesTab />}
         {tab === 'activities'  && <ActivitiesTab />}
         {tab === 'calendar'    && <CalendarTab />}
+        {tab === 'tournaments' && <TournamentsTab />}
       </div>
     </main>
   )

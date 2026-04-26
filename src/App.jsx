@@ -8,6 +8,7 @@ import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Register from './pages/Register'
 import Admin from './pages/Admin'
+import Tournaments from './pages/Tournaments'
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/register" element={<Register />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/tournaments" element={<Tournaments />} />
           </Routes>
           <Footer />
         </div>
