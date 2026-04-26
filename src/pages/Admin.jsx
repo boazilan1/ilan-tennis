@@ -251,7 +251,6 @@ function TraineesTab() {
 
   async function fetchPlayers() {
     setLoading(true)
-    // שתי שאילתות נפרדות כדי להימנע מבעיות FK join
     const [playerRes, profileRes] = await Promise.all([
       supabase.from('players')
         .select('id, name, birth_year, notes, user_id, enrollments(status, activity:activities(name))')
@@ -589,21 +588,16 @@ function ActivitiesTab() {
           </h3>
 
           <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            {/* שם */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>שם החוג <span style={{ color: '#c00' }}>*</span></label>
               <input name="name" value={form.name} onChange={handleChange} placeholder="למשל: טניס למתחילים"
                 style={inputStyle} />
             </div>
-
-            {/* תיאור */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>תיאור (אופציונלי)</label>
               <input name="description" value={form.description} onChange={handleChange} placeholder="תיאור קצר של החוג"
                 style={inputStyle} />
             </div>
-
-            {/* יום */}
             <div>
               <label style={labelStyle}>יום בשבוע <span style={{ color: '#c00' }}>*</span></label>
               <select name="day_of_week" value={form.day_of_week} onChange={handleChange} style={inputStyle}>
@@ -612,29 +606,21 @@ function ActivitiesTab() {
                 ))}
               </select>
             </div>
-
-            {/* שעה */}
             <div>
               <label style={labelStyle}>שעה <span style={{ color: '#c00' }}>*</span></label>
               <input name="time" value={form.time} onChange={handleChange} placeholder="למשל: 17:00"
                 style={inputStyle} />
             </div>
-
-            {/* מחיר */}
             <div>
               <label style={labelStyle}>מחיר לחודש (₪) <span style={{ color: '#c00' }}>*</span></label>
               <input name="price" value={form.price} onChange={handleChange} type="number" min="0" placeholder="300"
                 style={inputStyle} />
             </div>
-
-            {/* מקס תלמידים */}
             <div>
               <label style={labelStyle}>מקסימום תלמידים (אופציונלי)</label>
               <input name="max_students" value={form.max_students} onChange={handleChange} type="number" min="1" placeholder="10"
                 style={inputStyle} />
             </div>
-
-            {/* לינק תשלום */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>קישור לתשלום (אופציונלי)</label>
               <input name="payment_link" value={form.payment_link} onChange={handleChange}
@@ -728,33 +714,42 @@ function eventFormFromData(ev) {
 }
 
 function CalendarTab() {
+  const [viewMode, setViewMode] = useState('week') // 'week' | 'month'
   const [weekOffset, setWeekOffset] = useState(0)
+  const [monthOffset, setMonthOffset] = useState(0)
   const [activities, setActivities] = useState([])
   const [adminEvents, setAdminEvents] = useState([])
   const [allPlayers, setAllPlayers] = useState([])
-  const [selected, setSelected] = useState(null) // { type: 'activity'|'event', data, date }
+  const [selected, setSelected] = useState(null) // { type, data, date }
   // activity attendance
   const [enrollments, setEnrollments] = useState([])
   const [attendance, setAttendance] = useState({})
   const [saving, setSaving] = useState(false)
   const [loadingSession, setLoadingSession] = useState(false)
+  // activity session (per-date status + notes)
+  const [activitySession, setActivitySession] = useState({ status: 'scheduled', notes: '' })
+  const [savingSession, setSavingSession] = useState(false)
+  // add player to activity
+  const [showAddPlayer, setShowAddPlayer] = useState(false)
+  const [addPlayerSearch, setAddPlayerSearch] = useState('')
+  const [addingPlayer, setAddingPlayer] = useState(false)
   // event side-panel
   const [eventNotes, setEventNotes] = useState('')
   const [eventStatus, setEventStatus] = useState('scheduled')
   const [savingEvent, setSavingEvent] = useState(false)
   const [showDeleteOptions, setShowDeleteOptions] = useState(false)
   const [deletingEvent, setDeletingEvent] = useState(false)
-  // event players (personal training attendees)
-  const [eventPlayerMap, setEventPlayerMap] = useState({}) // player_id → present
+  // event players
+  const [eventPlayerMap, setEventPlayerMap] = useState({})
   const [loadingEventPlayers, setLoadingEventPlayers] = useState(false)
   const [savingEventPlayers, setSavingEventPlayers] = useState(false)
   const [playerSearch, setPlayerSearch] = useState('')
-  const [eventRoster, setEventRoster] = useState(new Set()) // player_ids in selected event roster
-  const [rosterForm, setRosterForm] = useState({}) // { player_id: true } for form selection
+  const [eventRoster, setEventRoster] = useState(new Set())
+  const [rosterForm, setRosterForm] = useState({})
   const [rosterSearch, setRosterSearch] = useState('')
-  // add / edit form
+  // add / edit event form
   const [showEventForm, setShowEventForm] = useState(false)
-  const [editingEvent, setEditingEvent] = useState(null) // null = new, else event obj
+  const [editingEvent, setEditingEvent] = useState(null)
   const [eventForm, setEventForm] = useState(EMPTY_EVENT_FORM)
 
   useEffect(() => { fetchAll() }, [])
@@ -763,7 +758,7 @@ function CalendarTab() {
     const [actRes, evRes, playerRes] = await Promise.all([
       supabase.from('activities').select('*'),
       supabase.from('admin_events').select('*').order('created_at'),
-      supabase.from('players').select('id, name, birth_year').order('name'),
+      supabase.from('players').select('id, name, birth_year, user_id').order('name'),
     ])
     if (actRes.data) setActivities(actRes.data)
     if (evRes.data) setAdminEvents(evRes.data)
@@ -784,6 +779,38 @@ function CalendarTab() {
     })
   }
 
+  function getMonthBase() {
+    const today = new Date()
+    return new Date(today.getFullYear(), today.getMonth() + monthOffset, 1)
+  }
+
+  function getMonthDays() {
+    const base = getMonthBase()
+    const year = base.getFullYear()
+    const month = base.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const startDow = firstDay.getDay()
+    const days = []
+    for (let i = startDow - 1; i >= 0; i--) {
+      const d = new Date(firstDay)
+      d.setDate(d.getDate() - (i + 1))
+      days.push({ date: d, inMonth: false })
+    }
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push({ date: new Date(year, month, i), inMonth: true })
+    }
+    const remaining = (7 - days.length % 7) % 7
+    for (let i = 1; i <= remaining; i++) {
+      const d = new Date(lastDay)
+      d.setDate(lastDay.getDate() + i)
+      days.push({ date: d, inMonth: false })
+    }
+    const weeks = []
+    for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7))
+    return weeks
+  }
+
   const weekDays = getWeekDays()
   const weekLabel = (() => {
     const s = weekDays[0].date, e = weekDays[6].date
@@ -802,18 +829,25 @@ function CalendarTab() {
   async function openActivity(activity, date) {
     setSelected({ type: 'activity', data: activity, date })
     setShowEventForm(false)
+    setShowAddPlayer(false)
+    setAddPlayerSearch('')
     setLoadingSession(true)
     setEnrollments([]); setAttendance({})
+    setActivitySession({ status: 'scheduled', notes: '' })
     const dateStr = formatDate(date)
-    const [enrollRes, attendRes] = await Promise.all([
+    const [enrollRes, attendRes, sessionRes] = await Promise.all([
       supabase.from('enrollments').select('player_id, player:players(id, name, birth_year)').eq('activity_id', activity.id).eq('status', 'active'),
       supabase.from('attendance').select('player_id, present').eq('activity_id', activity.id).eq('date', dateStr),
+      supabase.from('activity_sessions').select('status, notes').eq('activity_id', activity.id).eq('session_date', dateStr).maybeSingle(),
     ])
     if (enrollRes.data) setEnrollments(enrollRes.data)
     if (attendRes.data) {
       const map = {}
       attendRes.data.forEach(r => { map[r.player_id] = r.present })
       setAttendance(map)
+    }
+    if (sessionRes.data) {
+      setActivitySession({ status: sessionRes.data.status || 'scheduled', notes: sessionRes.data.notes || '' })
     }
     setLoadingSession(false)
   }
@@ -825,7 +859,6 @@ function CalendarTab() {
     setEventNotes(ev.notes || '')
     setEventStatus(ev.status || 'scheduled')
     setLoadingEventPlayers(true)
-    // טען רוסטר + נוכחות לתאריך זה
     const [rosterRes, attendRes] = await Promise.all([
       supabase.from('admin_event_roster').select('player_id').eq('event_id', ev.id),
       supabase.from('admin_event_players').select('player_id, present').eq('event_id', ev.id).eq('event_date', formatDate(date)),
@@ -859,6 +892,41 @@ function CalendarTab() {
     setSaving(false)
   }
 
+  async function saveActivitySession() {
+    setSavingSession(true)
+    await supabase.from('activity_sessions').upsert({
+      activity_id: selected.data.id,
+      session_date: formatDate(selected.date),
+      status: activitySession.status,
+      notes: activitySession.notes || null,
+    }, { onConflict: 'activity_id,session_date' })
+    setSavingSession(false)
+  }
+
+  async function addPlayerToActivity(playerId) {
+    setAddingPlayer(true)
+    const player = allPlayers.find(p => p.id === playerId)
+    const { data: existing } = await supabase.from('enrollments')
+      .select('id, status').eq('activity_id', selected.data.id).eq('player_id', playerId).maybeSingle()
+    if (existing) {
+      if (existing.status !== 'active') {
+        await supabase.from('enrollments').update({ status: 'active' }).eq('id', existing.id)
+      }
+    } else {
+      await supabase.from('enrollments').insert({
+        activity_id: selected.data.id, player_id: playerId,
+        user_id: player?.user_id || null, status: 'active',
+      })
+    }
+    const { data } = await supabase.from('enrollments')
+      .select('player_id, player:players(id, name, birth_year)')
+      .eq('activity_id', selected.data.id).eq('status', 'active')
+    if (data) setEnrollments(data)
+    setShowAddPlayer(false)
+    setAddPlayerSearch('')
+    setAddingPlayer(false)
+  }
+
   async function saveEventDetails() {
     setSavingEvent(true)
     await supabase.from('admin_events').update({ notes: eventNotes, status: eventStatus }).eq('id', selected.data.id)
@@ -887,7 +955,6 @@ function CalendarTab() {
     setSavingEventPlayers(false)
   }
 
-  // מחיקה - כל המופעים
   async function deleteEventAll() {
     setDeletingEvent(true)
     await supabase.from('admin_events').delete().eq('id', selected.data.id)
@@ -896,7 +963,6 @@ function CalendarTab() {
     setDeletingEvent(false)
   }
 
-  // מחיקה - מהיום והלאה (שומר היסטוריה)
   async function deleteEventFromNow() {
     setDeletingEvent(true)
     const yesterday = new Date(selected.date)
@@ -912,7 +978,6 @@ function CalendarTab() {
     setEditingEvent(ev)
     setEventForm(eventFormFromData(ev))
     setShowEventForm(true)
-    // טען רוסטר קיים לטופס
     const { data } = await supabase.from('admin_event_roster').select('player_id').eq('event_id', ev.id)
     const map = {}
     if (data) data.forEach(r => { map[r.player_id] = true })
@@ -952,7 +1017,6 @@ function CalendarTab() {
       if (data) { setAdminEvents(prev => [...prev, data]); eventId = data.id }
     }
 
-    // שמור רוסטר: מחק ישן + הכנס חדש
     if (eventId) {
       await supabase.from('admin_event_roster').delete().eq('event_id', eventId)
       if (selectedPlayerIds.length > 0) {
@@ -972,33 +1036,34 @@ function CalendarTab() {
     ? enrollments.filter(e => attendance[e.player_id] === true).length : 0
   const eventPresentCount = Object.values(eventPlayerMap).filter(v => v === true).length
 
+  // ─── JSX ───
   return (
     <div style={{ display: 'flex', gap: '24px' }}>
       {/* עמודת יומן */}
       <div style={{ flex: 1 }}>
-        {/* ניווט שבוע */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <button onClick={() => { setWeekOffset(w => w - 1); setSelected(null) }} style={navBtn}>◀ קודם</button>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 'bold', color: '#1a472a', fontSize: '16px' }}>{weekLabel}</div>
-            {weekOffset !== 0 && (
-              <button onClick={() => { setWeekOffset(0); setSelected(null) }}
-                style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' }}>
-                השבוע
-              </button>
-            )}
-          </div>
-          <button onClick={() => { setWeekOffset(w => w + 1); setSelected(null) }} style={navBtn}>הבא ▶</button>
-        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+        {/* שורת כפתורים: תצוגה + הוסף אירוע */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '3px', background: '#f0f0f0', borderRadius: '8px', padding: '3px' }}>
+            {[['week', 'שבועי'], ['month', 'חודשי']].map(([mode, label]) => (
+              <button key={mode} onClick={() => { setViewMode(mode); setSelected(null) }}
+                style={{
+                  background: viewMode === mode ? '#1a472a' : 'transparent',
+                  color: viewMode === mode ? '#fff' : '#666',
+                  border: 'none', borderRadius: '6px', padding: '6px 14px',
+                  cursor: 'pointer', fontSize: '13px', fontWeight: 'bold',
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
           <button onClick={openAddForm}
             style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 18px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
             + הוסף אירוע אישי
           </button>
         </div>
 
-        {/* טופס הוספה / עריכה */}
+        {/* טופס הוספה/עריכה אירוע אישי */}
         {showEventForm && (
           <form onSubmit={submitEventForm} style={{ background: '#faf5ff', border: '2px solid #7c3aed', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
             <h3 style={{ color: '#7c3aed', margin: '0 0 16px' }}>
@@ -1046,11 +1111,8 @@ function CalendarTab() {
               <label style={{ ...labelStyle, marginBottom: '8px', color: '#7c3aed' }}>
                 מתאמנים באירוע ({Object.values(rosterForm).filter(Boolean).length} נבחרו)
               </label>
-              <input
-                value={rosterSearch} onChange={e => setRosterSearch(e.target.value)}
-                placeholder="חיפוש שם..."
-                style={{ ...inputStyle, fontSize: '13px', marginBottom: '8px' }}
-              />
+              <input value={rosterSearch} onChange={e => setRosterSearch(e.target.value)}
+                placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '13px', marginBottom: '8px' }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '180px', overflowY: 'auto' }}>
                 {allPlayers.filter(p => !rosterSearch || p.name.includes(rosterSearch)).map(p => (
                   <label key={p.id} style={{
@@ -1081,78 +1143,181 @@ function CalendarTab() {
           </form>
         )}
 
-        {/* ימי השבוע */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {weekDays.map(({ key, date }) => {
-            const dayActivities = activities.filter(a => a.day_of_week === key)
-            const dayEvents = getEventsForDay(key, date)
-            const today = isToday(date)
-            const hasAnything = dayActivities.length > 0 || dayEvents.length > 0
-            return (
-              <div key={key} style={{
-                background: today ? '#f0fdf4' : '#fff',
-                border: today ? '2px solid #1a472a' : '1px solid #e5e5e5',
-                borderRadius: '10px', padding: '12px 16px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: hasAnything ? '10px' : 0 }}>
-                  <div style={{ minWidth: '80px' }}>
-                    <div style={{ fontWeight: 'bold', color: today ? '#1a472a' : '#333', fontSize: '15px' }}>יום {DAYS_HE[key]}</div>
-                    <div style={{ fontSize: '12px', color: '#888' }}>
-                      {date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}
-                      {today && <span style={{ color: '#1a472a', fontWeight: 'bold' }}> • היום</span>}
-                    </div>
-                  </div>
-                  {!hasAnything && <span style={{ color: '#ccc', fontSize: '13px' }}>אין פעילויות</span>}
-                </div>
-                {hasAnything && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {dayActivities.map(act => {
-                      const isSel = selected?.type === 'activity' && selected.data.id === act.id && formatDate(selected.date) === formatDate(date)
-                      return (
-                        <button key={act.id} onClick={() => openActivity(act, date)} style={{
-                          background: isSel ? '#1a472a' : '#e8f5e9', color: isSel ? '#fff' : '#1a472a',
-                          border: 'none', borderRadius: '8px', padding: '8px 14px',
-                          cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', textAlign: 'right',
-                        }}>
-                          <div>{act.name}</div>
-                          {act.time && <div style={{ fontWeight: 'normal', fontSize: '12px', opacity: 0.85 }}>🕐 {act.time}</div>}
-                        </button>
-                      )
-                    })}
-                    {dayEvents.map(ev => {
-                      const isSel = selected?.type === 'event' && selected.data.id === ev.id && formatDate(selected.date) === formatDate(date)
-                      const st = STATUS_EVENT[ev.status] || STATUS_EVENT.scheduled
-                      return (
-                        <button key={ev.id} onClick={() => openAdminEvent(ev, date)} style={{
-                          background: isSel ? '#7c3aed' : '#f5f3ff', color: isSel ? '#fff' : '#7c3aed',
-                          border: `1px solid ${isSel ? '#7c3aed' : '#c4b5fd'}`,
-                          borderRadius: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', textAlign: 'right',
-                        }}>
-                          <div>{ev.title}</div>
-                          <div style={{ fontWeight: 'normal', fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
-                            {ev.time && `🕐 ${ev.time}  `}
-                            <span style={{ color: isSel ? '#fff' : st.color }}>{st.label}</span>
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
+        {/* ── תצוגה שבועית ── */}
+        {viewMode === 'week' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <button onClick={() => { setWeekOffset(w => w - 1); setSelected(null) }} style={navBtn}>◀ קודם</button>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontWeight: 'bold', color: '#1a472a', fontSize: '16px' }}>{weekLabel}</div>
+                {weekOffset !== 0 && (
+                  <button onClick={() => { setWeekOffset(0); setSelected(null) }}
+                    style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' }}>
+                    השבוע
+                  </button>
                 )}
               </div>
-            )
-          })}
-        </div>
+              <button onClick={() => { setWeekOffset(w => w + 1); setSelected(null) }} style={navBtn}>הבא ▶</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {weekDays.map(({ key, date }) => {
+                const dayActivities = activities.filter(a => a.day_of_week === key)
+                const dayEvents = getEventsForDay(key, date)
+                const today = isToday(date)
+                const hasAnything = dayActivities.length > 0 || dayEvents.length > 0
+                return (
+                  <div key={key} style={{
+                    background: today ? '#f0fdf4' : '#fff',
+                    border: today ? '2px solid #1a472a' : '1px solid #e5e5e5',
+                    borderRadius: '10px', padding: '12px 16px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: hasAnything ? '10px' : 0 }}>
+                      <div style={{ minWidth: '80px' }}>
+                        <div style={{ fontWeight: 'bold', color: today ? '#1a472a' : '#333', fontSize: '15px' }}>יום {DAYS_HE[key]}</div>
+                        <div style={{ fontSize: '12px', color: '#888' }}>
+                          {date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}
+                          {today && <span style={{ color: '#1a472a', fontWeight: 'bold' }}> • היום</span>}
+                        </div>
+                      </div>
+                      {!hasAnything && <span style={{ color: '#ccc', fontSize: '13px' }}>אין פעילויות</span>}
+                    </div>
+                    {hasAnything && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {dayActivities.map(act => {
+                          const isSel = selected?.type === 'activity' && selected.data.id === act.id && formatDate(selected.date) === formatDate(date)
+                          return (
+                            <button key={act.id} onClick={() => openActivity(act, date)} style={{
+                              background: isSel ? '#1a472a' : '#e8f5e9', color: isSel ? '#fff' : '#1a472a',
+                              border: 'none', borderRadius: '8px', padding: '8px 14px',
+                              cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', textAlign: 'right',
+                            }}>
+                              <div>{act.name}</div>
+                              {act.time && <div style={{ fontWeight: 'normal', fontSize: '12px', opacity: 0.85 }}>🕐 {act.time}</div>}
+                            </button>
+                          )
+                        })}
+                        {dayEvents.map(ev => {
+                          const isSel = selected?.type === 'event' && selected.data.id === ev.id && formatDate(selected.date) === formatDate(date)
+                          const st = STATUS_EVENT[ev.status] || STATUS_EVENT.scheduled
+                          return (
+                            <button key={ev.id} onClick={() => openAdminEvent(ev, date)} style={{
+                              background: isSel ? '#7c3aed' : '#f5f3ff', color: isSel ? '#fff' : '#7c3aed',
+                              border: `1px solid ${isSel ? '#7c3aed' : '#c4b5fd'}`,
+                              borderRadius: '8px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold', textAlign: 'right',
+                            }}>
+                              <div>{ev.title}</div>
+                              <div style={{ fontWeight: 'normal', fontSize: '11px', opacity: 0.85, marginTop: '2px' }}>
+                                {ev.time && `🕐 ${ev.time}  `}
+                                <span style={{ color: isSel ? '#fff' : st.color }}>{st.label}</span>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+
+        {/* ── תצוגה חודשית ── */}
+        {viewMode === 'month' && (() => {
+          const base = getMonthBase()
+          const mLabel = base.toLocaleDateString('he-IL', { month: 'long', year: 'numeric' })
+          const weeks = getMonthDays()
+          return (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <button onClick={() => { setMonthOffset(m => m - 1); setSelected(null) }} style={navBtn}>◀ קודם</button>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontWeight: 'bold', color: '#1a472a', fontSize: '16px' }}>{mLabel}</div>
+                  {monthOffset !== 0 && (
+                    <button onClick={() => { setMonthOffset(0); setSelected(null) }}
+                      style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>
+                      החודש
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => { setMonthOffset(m => m + 1); setSelected(null) }} style={navBtn}>הבא ▶</button>
+              </div>
+              {/* כותרות ימים */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
+                {DAYS_ORDER.map(d => (
+                  <div key={d} style={{ textAlign: 'center', fontSize: '11px', color: '#888', fontWeight: 'bold', padding: '4px 2px' }}>
+                    {DAYS_HE[d]}
+                  </div>
+                ))}
+              </div>
+              {/* שבועות */}
+              {weeks.map((week, wi) => (
+                <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '2px' }}>
+                  {week.map(({ date, inMonth }, di) => {
+                    const dayKey = DAYS_ORDER[date.getDay()]
+                    const dayActivities = inMonth ? activities.filter(a => a.day_of_week === dayKey) : []
+                    const dayEvents = inMonth ? getEventsForDay(dayKey, date) : []
+                    const allItems = [
+                      ...dayActivities.map(a => ({ type: 'activity', item: a })),
+                      ...dayEvents.map(ev => ({ type: 'event', item: ev })),
+                    ]
+                    const today = isToday(date)
+                    return (
+                      <div key={di} style={{
+                        minHeight: '72px',
+                        background: today ? '#f0fdf4' : inMonth ? '#fff' : '#f9f9f9',
+                        border: today ? '2px solid #1a472a' : '1px solid #e5e5e5',
+                        borderRadius: '6px', padding: '4px', overflow: 'hidden',
+                      }}>
+                        <div style={{
+                          fontSize: '12px', fontWeight: 'bold',
+                          color: today ? '#1a472a' : inMonth ? '#333' : '#ccc',
+                          marginBottom: '3px',
+                        }}>
+                          {date.getDate()}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          {allItems.slice(0, 3).map(({ type, item }) => {
+                            const isSel = selected?.type === type && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
+                            const isAct = type === 'activity'
+                            return (
+                              <button key={item.id}
+                                onClick={() => isAct ? openActivity(item, date) : openAdminEvent(item, date)}
+                                style={{
+                                  background: isSel ? (isAct ? '#1a472a' : '#7c3aed') : (isAct ? '#e8f5e9' : '#f5f3ff'),
+                                  color: isSel ? '#fff' : (isAct ? '#1a472a' : '#7c3aed'),
+                                  border: 'none', borderRadius: '3px', padding: '2px 4px',
+                                  fontSize: '10px', cursor: 'pointer', textAlign: 'right',
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                  width: '100%',
+                                }}>
+                                {item.name || item.title}
+                              </button>
+                            )
+                          })}
+                          {allItems.length > 3 && (
+                            <div style={{ fontSize: '9px', color: '#888', textAlign: 'center' }}>+{allItems.length - 3} עוד</div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </>
+          )
+        })()}
       </div>
 
-      {/* פאנל צד */}
+      {/* ── פאנל צד ── */}
       {selected && (
         <div style={{
-          width: '310px', flexShrink: 0, background: '#fff', borderRadius: '12px',
+          width: '320px', flexShrink: 0, background: '#fff', borderRadius: '12px',
           border: `2px solid ${selected.type === 'event' ? '#7c3aed' : '#1a472a'}`,
           padding: '20px', alignSelf: 'flex-start', position: 'sticky', top: '20px',
           maxHeight: '85vh', overflowY: 'auto',
         }}>
-          {/* כותרת */}
+          {/* כותרת פאנל */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ fontWeight: 'bold', color: selected.type === 'event' ? '#7c3aed' : '#1a472a', fontSize: '16px' }}>
@@ -1169,40 +1334,121 @@ function CalendarTab() {
               style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#888', lineHeight: 1 }}>✕</button>
           </div>
 
-          {/* ── פאנל חוג: נוכחות ── */}
+          {/* ── פאנל חוג ── */}
           {selected.type === 'activity' && (
-            loadingSession ? <p style={{ color: '#888', textAlign: 'center' }}>טוען...</p> :
-            enrollments.length === 0 ? <p style={{ color: '#aaa', textAlign: 'center', fontSize: '14px' }}>אין תלמידים פעילים רשומים</p> : (
-              <>
-                <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>
-                  נוכחים: <strong style={{ color: '#16a34a' }}>{presentCount}</strong> / {enrollments.length}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', marginBottom: '14px' }}>
-                  {enrollments.map(e => {
-                    const present = attendance[e.player_id]
-                    return (
-                      <button key={e.player_id} onClick={() => toggleAttendance(e.player_id)} style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#f9f9f9',
-                        border: `1px solid ${present === true ? '#16a34a' : present === false ? '#dc2626' : '#ddd'}`,
-                        borderRadius: '8px', padding: '9px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
+            loadingSession ? <p style={{ color: '#888', textAlign: 'center' }}>טוען...</p> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                {/* סטטוס מפגש */}
+                <div>
+                  <label style={labelStyle}>סטטוס מפגש</label>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {Object.entries(STATUS_EVENT).map(([key, val]) => (
+                      <button key={key} onClick={() => setActivitySession(s => ({ ...s, status: key }))} style={{
+                        background: activitySession.status === key ? val.color : '#f9f9f9',
+                        color: activitySession.status === key ? '#fff' : val.color,
+                        border: `1px solid ${val.color}`,
+                        borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
                       }}>
-                        <span style={{ fontSize: '18px', minWidth: '22px' }}>
-                          {present === true ? '✅' : present === false ? '❌' : '⬜'}
-                        </span>
-                        <div>
-                          <div style={{ fontWeight: '500', fontSize: '14px' }}>{e.player?.name}</div>
-                          <div style={{ fontSize: '12px', color: '#888' }}>יליד {e.player?.birth_year}</div>
-                        </div>
+                        {val.label}
                       </button>
-                    )
-                  })}
+                    ))}
+                  </div>
                 </div>
-                <button onClick={saveAttendance} disabled={saving}
-                  style={{ width: '100%', background: '#1a472a', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-                  {saving ? 'שומר...' : 'שמור נוכחות'}
+
+                {/* הערות מפגש */}
+                <div>
+                  <label style={labelStyle}>הערות מפגש</label>
+                  <textarea value={activitySession.notes}
+                    onChange={e => setActivitySession(s => ({ ...s, notes: e.target.value }))}
+                    placeholder="הוסף הערות..." rows={2}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+                </div>
+
+                <button onClick={saveActivitySession} disabled={savingSession}
+                  style={{ width: '100%', background: '#1a472a', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', opacity: savingSession ? 0.6 : 1 }}>
+                  {savingSession ? 'שומר...' : 'שמור פרטי מפגש'}
                 </button>
-              </>
+
+                {/* נוכחות */}
+                <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '14px' }}>
+                  <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>
+                    נוכחות: <strong style={{ color: '#16a34a' }}>{presentCount}</strong> / {enrollments.length}
+                  </div>
+                  {enrollments.length === 0 ? (
+                    <p style={{ color: '#aaa', textAlign: 'center', fontSize: '13px', margin: '8px 0' }}>אין תלמידים פעילים</p>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                        {enrollments.map(e => {
+                          const present = attendance[e.player_id]
+                          return (
+                            <button key={e.player_id} onClick={() => toggleAttendance(e.player_id)} style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#f9f9f9',
+                              border: `1px solid ${present === true ? '#16a34a' : present === false ? '#dc2626' : '#ddd'}`,
+                              borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                            }}>
+                              <span style={{ fontSize: '18px', minWidth: '22px' }}>
+                                {present === true ? '✅' : present === false ? '❌' : '⬜'}
+                              </span>
+                              <div>
+                                <div style={{ fontWeight: '500', fontSize: '14px' }}>{e.player?.name}</div>
+                                <div style={{ fontSize: '12px', color: '#888' }}>יליד {e.player?.birth_year}</div>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <button onClick={saveAttendance} disabled={saving}
+                        style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', opacity: saving ? 0.6 : 1, marginBottom: '4px' }}>
+                        {saving ? 'שומר...' : 'שמור נוכחות'}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* הוספת מתאמן לחוג */}
+                <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '12px' }}>
+                  {!showAddPlayer ? (
+                    <button onClick={() => setShowAddPlayer(true)}
+                      style={{ width: '100%', background: '#fff', color: '#1a472a', border: '1px solid #1a472a', borderRadius: '8px', padding: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: 'bold' }}>
+                      + הוסף מתאמן לחוג
+                    </button>
+                  ) : (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <label style={{ ...labelStyle, margin: 0 }}>הוסף מתאמן לחוג</label>
+                        <button onClick={() => { setShowAddPlayer(false); setAddPlayerSearch('') }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', color: '#888' }}>✕</button>
+                      </div>
+                      <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)}
+                        placeholder="חיפוש שם מתאמן..."
+                        style={{ ...inputStyle, fontSize: '13px', marginBottom: '8px' }} />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '180px', overflowY: 'auto' }}>
+                        {allPlayers
+                          .filter(p =>
+                            !enrollments.some(en => en.player_id === p.id) &&
+                            (!addPlayerSearch || p.name.includes(addPlayerSearch))
+                          )
+                          .map(p => (
+                            <button key={p.id} onClick={() => addPlayerToActivity(p.id)} disabled={addingPlayer}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: '#f9f9f9', border: '1px solid #ddd',
+                                borderRadius: '7px', padding: '7px 10px', cursor: 'pointer',
+                                textAlign: 'right', width: '100%', opacity: addingPlayer ? 0.6 : 1,
+                              }}>
+                              <span style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</span>
+                              <span style={{ fontSize: '11px', color: '#aaa' }}>יליד {p.birth_year}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
             )
           )}
 
@@ -1213,7 +1459,6 @@ function CalendarTab() {
                 <p style={{ margin: 0, fontSize: '14px', color: '#555' }}>{selected.data.description}</p>
               )}
 
-              {/* כפתור עריכה */}
               <button onClick={() => openEditForm(selected.data)}
                 style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #c4b5fd', borderRadius: '8px', padding: '8px', fontSize: '13px', cursor: 'pointer', fontWeight: 'bold' }}>
                 ✏️ עריכת פרטי האירוע
@@ -1270,7 +1515,7 @@ function CalendarTab() {
                       <input value={playerSearch} onChange={e => setPlayerSearch(e.target.value)}
                         placeholder="חיפוש שם..."
                         style={{ width: '100%', padding: '7px 10px', borderRadius: '7px', border: '1px solid #ccc', fontSize: '13px', boxSizing: 'border-box', marginBottom: '8px' }} />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px', maxHeight: '220px', overflowY: 'auto' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px', maxHeight: '200px', overflowY: 'auto' }}>
                         {rosterPlayers.map(p => {
                           const present = eventPlayerMap[p.id]
                           return (
