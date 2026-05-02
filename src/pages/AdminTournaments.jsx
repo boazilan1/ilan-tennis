@@ -120,6 +120,9 @@ export default function TournamentsTab() {
   const [resultScore, setResultScore] = useState('')
   const [resultWinner, setResultWinner] = useState('')
   const [savingResult, setSavingResult] = useState(false)
+  const [schedulingMatchId, setSchedulingMatchId] = useState(null)
+  const [schedForm, setSchedForm] = useState({ scheduled_at: '', location: '' })
+  const [savingSchedule, setSavingSchedule] = useState(false)
   // Seed order: array of playerIds in seeding priority (strongest first)
   const [seedOrder, setSeedOrder] = useState([])
 
@@ -265,6 +268,37 @@ export default function TournamentsTab() {
     setTournaments(prev => prev.map(x => x.id === t.id ? updated : x))
     await loadDetail(updated)
     setDrawing(false)
+  }
+
+  function toLocalDatetime(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    const pad = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  function formatMatchTime(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    return d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) + ' ' +
+      d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function openSchedule(m) {
+    setSchedulingMatchId(m.id)
+    setSchedForm({ scheduled_at: toLocalDatetime(m.scheduled_at), location: m.location || '' })
+    setEditingMatchId(null)
+  }
+
+  async function saveSchedule() {
+    setSavingSchedule(true)
+    await supabase.from('tournament_matches').update({
+      scheduled_at: schedForm.scheduled_at ? new Date(schedForm.scheduled_at).toISOString() : null,
+      location: schedForm.location.trim() || null,
+    }).eq('id', schedulingMatchId)
+    setSchedulingMatchId(null)
+    await loadDetail(selected)
+    setSavingSchedule(false)
   }
 
   async function saveResult() {
@@ -589,6 +623,7 @@ export default function TournamentsTab() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                           {knockoutMatches.filter(m => m.round === round).map(m => {
                             const isEditing = editingMatchId === m.id
+                            const isScheduling = schedulingMatchId === m.id
                             const isP1Win = m.winner_id === m.player1_id
                             const isP2Win = m.winner_id === m.player2_id
                             const isBye = m.status === 'completed' && (!m.player1_id || !m.player2_id)
@@ -607,17 +642,56 @@ export default function TournamentsTab() {
                                   </span>
                                   {isP2Win && <span>{isBye ? '→' : '🏆'}</span>}
                                 </div>
-                                {m.score && <div style={{ padding: '5px 14px', fontSize: '11px', color: '#888', background: '#f9f9f9', borderTop: '1px solid #eee', textAlign: 'center' }}>{m.score}</div>}
-                                {isBye && <div style={{ padding: '4px 14px', fontSize: '11px', color: '#d97706', background: '#fffbeb', borderTop: '1px solid #fde68a', textAlign: 'center' }}>עבר אוטומטית</div>}
-                                {canEnter && !isEditing && (
-                                  <button onClick={() => { setEditingMatchId(m.id); setResultScore(''); setResultWinner('') }}
-                                    style={{ width: '100%', background: '#fef3c7', color: '#d97706', border: 'none', borderTop: '1px solid #fde68a', padding: '7px', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}>
-                                    ⏳ הזן תוצאה
-                                  </button>
+                                {/* Score / schedule info */}
+                                {(m.score || m.scheduled_at || m.location || isBye) && (
+                                  <div style={{ padding: '5px 14px', fontSize: '11px', background: '#f9f9f9', borderTop: '1px solid #eee' }}>
+                                    {m.score && <div style={{ color: '#555', fontWeight: '600', textAlign: 'center' }}>{m.score}</div>}
+                                    {isBye && <div style={{ color: '#d97706', textAlign: 'center' }}>עבר אוטומטית</div>}
+                                    {m.scheduled_at && <div style={{ color: '#7c3aed' }}>📅 {formatMatchTime(m.scheduled_at)}</div>}
+                                    {m.location && <div style={{ color: '#888' }}>📍 {m.location}</div>}
+                                  </div>
+                                )}
+                                {/* Action buttons */}
+                                {!isBye && !isEditing && !isScheduling && (
+                                  <div style={{ display: 'flex', borderTop: '1px solid #f0f0f0' }}>
+                                    {canEnter && (
+                                      <button onClick={() => { setEditingMatchId(m.id); setResultScore(''); setResultWinner(''); setSchedulingMatchId(null) }}
+                                        style={{ flex: 1, background: '#fef3c7', color: '#d97706', border: 'none', borderLeft: '1px solid #f0f0f0', padding: '7px', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}>
+                                        ⏳ תוצאה
+                                      </button>
+                                    )}
+                                    <button onClick={() => openSchedule(m)}
+                                      style={{ flex: 1, background: '#f5f3ff', color: '#7c3aed', border: 'none', padding: '7px', fontSize: '11px', cursor: 'pointer', fontWeight: '600' }}>
+                                      📅 זמן ומיקום
+                                    </button>
+                                  </div>
                                 )}
                                 {isEditing && (
                                   <div style={{ padding: '10px 12px', background: '#f9f9f9', borderTop: '1px solid #eee' }}>
                                     <ResultForm m={m} fmt={fmt} resultScore={resultScore} setResultScore={setResultScore} resultWinner={resultWinner} setResultWinner={setResultWinner} savingResult={savingResult} saveResult={saveResult} cancel={() => setEditingMatchId(null)} pName={pName} is={is} ob={ob} pb={pb} ls={ls} compact />
+                                  </div>
+                                )}
+                                {isScheduling && (
+                                  <div style={{ padding: '10px 12px', background: '#f5f3ff', borderTop: '1px solid #e9d5ff' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                      <div>
+                                        <label style={{ ...ls, fontSize: '11px' }}>תאריך ושעה</label>
+                                        <input type="datetime-local" value={schedForm.scheduled_at} onChange={e => setSchedForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                                          style={{ ...is, fontSize: '12px', padding: '6px 8px' }} />
+                                      </div>
+                                      <div>
+                                        <label style={{ ...ls, fontSize: '11px' }}>מיקום</label>
+                                        <input value={schedForm.location} onChange={e => setSchedForm(f => ({ ...f, location: e.target.value }))}
+                                          placeholder="מגרש 1..." style={{ ...is, fontSize: '12px', padding: '6px 8px' }} />
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                      <button onClick={() => setSchedulingMatchId(null)} style={{ ...ob, padding: '5px 10px', fontSize: '11px' }}>ביטול</button>
+                                      <button onClick={saveSchedule} disabled={savingSchedule}
+                                        style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', opacity: savingSchedule ? 0.6 : 1 }}>
+                                        {savingSchedule ? '...' : 'שמור'}
+                                      </button>
+                                    </div>
                                   </div>
                                 )}
                               </div>

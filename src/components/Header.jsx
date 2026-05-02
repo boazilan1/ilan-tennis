@@ -15,6 +15,7 @@ export default function Header() {
   const navLinks = [
     { to: '/', label: 'בית' },
     { to: '/activities', label: 'פעילויות' },
+    { to: '/tournaments', label: 'תחרויות' },
     { to: '/register', label: 'הרשמה לחוג' },
     ...(isAdmin ? [{ to: '/admin', label: '⚙️ ניהול' }] : []),
   ]
