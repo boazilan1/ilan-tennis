@@ -544,26 +544,66 @@ export default function TournamentsTab() {
                         <div style={{ padding: '10px 14px', borderTop: '1px solid #f0f0f0' }}>
                           {groupMatches.map(m => {
                             const isEditing = editingMatchId === m.id
+                            const isScheduling = schedulingMatchId === m.id
                             return (
-                              <div key={m.id} style={{ marginBottom: '8px' }}>
+                              <div key={m.id} style={{ marginBottom: '10px', background: '#fafafa', borderRadius: '8px', border: '1px solid #f0f0f0', padding: '8px 10px' }}>
+                                {/* Match row */}
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
-                                  <div style={{ fontSize: '12px', color: '#333' }}>
+                                  <div style={{ fontSize: '12px', color: '#333', flex: 1, minWidth: 0 }}>
                                     <span style={{ fontWeight: m.winner_id === m.player1_id ? '700' : '400' }}>{pName(m.player1_id)}</span>
-                                    <span style={{ color: '#bbb', margin: '0 6px' }}>vs</span>
+                                    <span style={{ color: '#bbb', margin: '0 5px' }}>vs</span>
                                     <span style={{ fontWeight: m.winner_id === m.player2_id ? '700' : '400' }}>{pName(m.player2_id)}</span>
                                     {m.score && <span style={{ color: '#888', marginRight: '6px' }}> · {m.score}</span>}
                                   </div>
-                                  {t.status === 'groups' && m.status === 'pending' && !isEditing && (
-                                    <button onClick={() => { setEditingMatchId(m.id); setResultScore(''); setResultWinner('') }}
-                                      style={{ background: '#f0f7f0', color: '#1a472a', border: '1px solid #c5ddc5', borderRadius: '6px', padding: '3px 10px', cursor: 'pointer', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                                      הזן תוצאה
-                                    </button>
-                                  )}
-                                  {m.status === 'completed' && (
-                                    <span style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>✓</span>
-                                  )}
+                                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                                    {t.status === 'groups' && m.status === 'pending' && !isEditing && !isScheduling && (
+                                      <button onClick={() => { setEditingMatchId(m.id); setResultScore(''); setResultWinner(''); setSchedulingMatchId(null) }}
+                                        style={{ background: '#f0f7f0', color: '#1a472a', border: '1px solid #c5ddc5', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px' }}>
+                                        תוצאה
+                                      </button>
+                                    )}
+                                    {!isEditing && !isScheduling && (
+                                      <button onClick={() => openSchedule(m)}
+                                        style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #e9d5ff', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px' }}>
+                                        📅
+                                      </button>
+                                    )}
+                                    {m.status === 'completed' && !isEditing && !isScheduling && (
+                                      <span style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>✓</span>
+                                    )}
+                                  </div>
                                 </div>
-                                {isEditing && <ResultForm m={m} fmt={fmt} resultScore={resultScore} setResultScore={setResultScore} resultWinner={resultWinner} setResultWinner={setResultWinner} savingResult={savingResult} saveResult={saveResult} cancel={() => setEditingMatchId(null)} pName={pName} is={is} ob={ob} pb={pb} ls={ls} />}
+                                {/* Schedule info */}
+                                {(m.scheduled_at || m.location) && !isScheduling && (
+                                  <div style={{ marginTop: '4px', fontSize: '11px', display: 'flex', gap: '8px' }}>
+                                    {m.scheduled_at && <span style={{ color: '#7c3aed' }}>📅 {formatMatchTime(m.scheduled_at)}</span>}
+                                    {m.location && <span style={{ color: '#888' }}>📍 {m.location}</span>}
+                                  </div>
+                                )}
+                                {isEditing && <div style={{ marginTop: '8px' }}><ResultForm m={m} fmt={fmt} resultScore={resultScore} setResultScore={setResultScore} resultWinner={resultWinner} setResultWinner={setResultWinner} savingResult={savingResult} saveResult={saveResult} cancel={() => setEditingMatchId(null)} pName={pName} is={is} ob={ob} pb={pb} ls={ls} /></div>}
+                                {isScheduling && (
+                                  <div style={{ marginTop: '8px', background: '#f5f3ff', borderRadius: '8px', padding: '10px' }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                                      <div>
+                                        <label style={{ ...ls, fontSize: '11px' }}>תאריך ושעה</label>
+                                        <input type="datetime-local" value={schedForm.scheduled_at} onChange={e => setSchedForm(f => ({ ...f, scheduled_at: e.target.value }))}
+                                          style={{ ...is, fontSize: '12px', padding: '6px 8px' }} />
+                                      </div>
+                                      <div>
+                                        <label style={{ ...ls, fontSize: '11px' }}>מיקום</label>
+                                        <input value={schedForm.location} onChange={e => setSchedForm(f => ({ ...f, location: e.target.value }))}
+                                          placeholder="מגרש 1..." style={{ ...is, fontSize: '12px', padding: '6px 8px' }} />
+                                      </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                      <button onClick={() => setSchedulingMatchId(null)} style={{ ...ob, padding: '5px 10px', fontSize: '11px' }}>ביטול</button>
+                                      <button onClick={saveSchedule} disabled={savingSchedule}
+                                        style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '8px', padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontWeight: '600', opacity: savingSchedule ? 0.6 : 1 }}>
+                                        {savingSchedule ? '...' : 'שמור'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )
                           })}
