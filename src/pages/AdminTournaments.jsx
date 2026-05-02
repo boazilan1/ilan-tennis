@@ -7,7 +7,7 @@ const STATUS_T = {
   knockout:  { label: 'נוק-אאוט',   color: '#7c3aed' },
   completed: { label: 'הסתיים 🏆',  color: '#16a34a' },
 }
-const ROUND_NAMES = { 1: 'גמר', 2: 'חצי גמר', 4: 'רבע גמר', 8: 'שמינית גמר' }
+const ROUND_NAMES = { 1: 'גמר', 2: 'חצי גמר', 4: 'רבע גמר', 8: 'שמינית גמר', 16: 'שישה-עשר', 32: 'שלושים ושניים' }
 const GROUP_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 
 const ls = { display: 'block', marginBottom: '6px', fontSize: '13px', color: '#555', fontWeight: '600' }
@@ -24,7 +24,11 @@ export default function TournamentsTab() {
   const [tMatches, setTMatches] = useState([])
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const [createForm, setCreateForm] = useState({ name: '', description: '', start_date: '', groups_count: '2', advance_per_group: '2' })
+  const [createForm, setCreateForm] = useState({
+    name: '', description: '', start_date: '',
+    groups_count: '2', advance_per_group: '2',
+    match_format: 'bo1', mode: 'groups_knockout',
+  })
   const [creating, setCreating] = useState(false)
   const [playerSearch, setPlayerSearch] = useState('')
   const [drawing, setDrawing] = useState(false)
@@ -70,6 +74,11 @@ export default function TournamentsTab() {
     }).sort((a, b) => b.points - a.points || b.wins - a.wins)
   }
 
+  function scorePlaceholder(format) {
+    if (format === 'bo3') return 'סט1: 6-4, סט2: 3-6, סט3: 7-5'
+    return '6-4'
+  }
+
   async function handleCreate(e) {
     e.preventDefault()
     if (!createForm.name.trim()) return
@@ -81,11 +90,13 @@ export default function TournamentsTab() {
       status: 'draft',
       groups_count: parseInt(createForm.groups_count) || 2,
       advance_per_group: parseInt(createForm.advance_per_group) || 2,
+      match_format: createForm.match_format,
+      mode: createForm.mode,
     }).select().single()
     if (data) {
       setTournaments(prev => [data, ...prev])
       setShowCreate(false)
-      setCreateForm({ name: '', description: '', start_date: '', groups_count: '2', advance_per_group: '2' })
+      setCreateForm({ name: '', description: '', start_date: '', groups_count: '2', advance_per_group: '2', match_format: 'bo1', mode: 'groups_knockout' })
       await loadDetail(data)
     }
     setCreating(false)
@@ -144,6 +155,39 @@ export default function TournamentsTab() {
     setDrawing(false)
   }
 
+  async function startKnockoutOnly() {
+    const t = selected
+    const n = tPlayers.length
+    if (n < 2 || (n & (n - 1)) !== 0) {
+      alert(`מספר שחקנים (${n}) חייב להיות חזקה של 2: 2, 4, 8, 16, 32, 64`)
+      return
+    }
+    setDrawing(true)
+    const shuffled = [...tPlayers].sort(() => Math.random() - 0.5)
+    const firstRound = n / 2
+    const matches = []
+    for (let i = 0; i < firstRound; i++) {
+      matches.push({
+        tournament_id: t.id, phase: 'knockout', round: firstRound, match_num: i + 1,
+        player1_id: shuffled[i * 2].player_id, player2_id: shuffled[i * 2 + 1].player_id, status: 'pending',
+      })
+    }
+    let r = Math.floor(firstRound / 2)
+    while (r >= 1) {
+      for (let i = 0; i < r; i++) {
+        matches.push({ tournament_id: t.id, phase: 'knockout', round: r, match_num: i + 1, player1_id: null, player2_id: null, status: 'pending' })
+      }
+      r = Math.floor(r / 2)
+    }
+    await supabase.from('tournament_matches').insert(matches)
+    await supabase.from('tournaments').update({ status: 'knockout' }).eq('id', t.id)
+    const updated = { ...t, status: 'knockout' }
+    setSelected(updated)
+    setTournaments(prev => prev.map(x => x.id === t.id ? updated : x))
+    await loadDetail(updated)
+    setDrawing(false)
+  }
+
   async function saveResult() {
     if (!resultWinner || !editingMatchId) return
     setSavingResult(true)
@@ -156,7 +200,7 @@ export default function TournamentsTab() {
     if (match.phase === 'group') {
       const winnerTp = tPlayers.find(tp => tp.player_id === resultWinner && tp.group_num === match.group_num)
       if (winnerTp) {
-        await supabase.from('tournament_players').update({ group_points: (winnerTp.group_points || 0) + 3 }).eq('id', winnerTp.id)
+        await supabase.from('tournament_players').update({ group_points: (winnerTp.group_points || 0) + 1 }).eq('id', winnerTp.id)
       }
     } else if (match.phase === 'knockout') {
       const nextRound = match.round / 2
@@ -198,7 +242,6 @@ export default function TournamentsTab() {
       }
     }
 
-    // Cross-seeding: winners vs reversed runners-up
     const winners = [], runnersUp = []
     for (let g = 1; g <= t.groups_count; g++) {
       if (groupStandings[g][0]) winners.push(groupStandings[g][0].player_id)
@@ -242,7 +285,6 @@ export default function TournamentsTab() {
   // ── Render ──
   if (loading) return <div style={{ textAlign: 'center', padding: '40px', color: '#bbb' }}>טוען...</div>
 
-  // Detail view
   if (selected) {
     const t = selected
     const st = STATUS_T[t.status] || STATUS_T.draft
@@ -251,6 +293,8 @@ export default function TournamentsTab() {
     const allGroupMatchesDone = tMatches.filter(m => m.phase === 'group').every(m => m.status === 'completed')
     const knockoutMatches = tMatches.filter(m => m.phase === 'knockout')
     const knockoutRounds = [...new Set(knockoutMatches.map(m => m.round))].sort((a, b) => b - a)
+    const fmt = t.match_format || 'bo1'
+    const isKnockoutOnly = t.mode === 'knockout_only'
 
     return (
       <div>
@@ -259,7 +303,13 @@ export default function TournamentsTab() {
           <button onClick={() => { setSelected(null); setTPlayers([]); setTMatches([]) }} style={{ ...ob, padding: '8px 14px' }}>← חזרה</button>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '22px', fontWeight: '800', color: '#111' }}>{t.name}</div>
-            {t.start_date && <div style={{ fontSize: '13px', color: '#888' }}>{new Date(t.start_date).toLocaleDateString('he-IL')}</div>}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+              {t.start_date && <span style={{ fontSize: '12px', color: '#aaa' }}>{new Date(t.start_date).toLocaleDateString('he-IL')}</span>}
+              <span style={{ fontSize: '12px', color: '#aaa' }}>·</span>
+              <span style={{ fontSize: '12px', color: '#7c3aed', fontWeight: '600' }}>{fmt === 'bo3' ? 'הטוב מ-3 סטים' : 'סט אחד'}</span>
+              {!isKnockoutOnly && <><span style={{ fontSize: '12px', color: '#aaa' }}>·</span><span style={{ fontSize: '12px', color: '#888' }}>בתים + נוק-אאוט</span></>}
+              {isKnockoutOnly && <><span style={{ fontSize: '12px', color: '#aaa' }}>·</span><span style={{ fontSize: '12px', color: '#888' }}>נוק-אאוט בלבד</span></>}
+            </div>
           </div>
           <div style={{ background: `${st.color}18`, color: st.color, borderRadius: '20px', padding: '5px 16px', fontSize: '13px', fontWeight: '700' }}>{st.label}</div>
           <button onClick={() => deleteTournament(t)} style={{ background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px' }}>מחק</button>
@@ -269,14 +319,13 @@ export default function TournamentsTab() {
           <div style={{ textAlign: 'center', padding: '40px', color: '#bbb' }}>טוען...</div>
         ) : (
           <div>
-            {/* ── Draft phase: manage players ── */}
+            {/* ── Draft phase ── */}
             {t.status === 'draft' && (
               <div>
                 <div style={{ fontWeight: '700', fontSize: '16px', color: '#333', marginBottom: '16px' }}>
                   שחקנים רשומים ({tPlayers.length})
                 </div>
 
-                {/* Registered players */}
                 {tPlayers.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
                     {tPlayers.map(tp => (
@@ -288,38 +337,59 @@ export default function TournamentsTab() {
                   </div>
                 )}
 
-                {/* Add player search */}
                 <div style={{ background: '#fff', border: '1px solid #e8ece8', borderRadius: '14px', padding: '18px', marginBottom: '24px' }}>
                   <div style={{ fontSize: '14px', fontWeight: '600', color: '#555', marginBottom: '10px' }}>הוסף שחקנים</div>
                   <input value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...is, marginBottom: '10px' }} />
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
                     {notRegistered.map(p => (
-                      <button key={p.id} onClick={() => addPlayer(p.id)} style={{
-                        background: '#f9f9f9', border: '1px solid #eee', borderRadius: '20px', padding: '6px 14px',
-                        cursor: 'pointer', fontSize: '13px', color: '#333',
-                      }}>{p.name} <span style={{ color: '#bbb', fontSize: '11px' }}>{p.birth_year}</span></button>
+                      <button key={p.id} onClick={() => addPlayer(p.id)} style={{ background: '#f9f9f9', border: '1px solid #eee', borderRadius: '20px', padding: '6px 14px', cursor: 'pointer', fontSize: '13px', color: '#333' }}>
+                        {p.name} {p.birth_year && <span style={{ color: '#bbb', fontSize: '11px' }}>{p.birth_year}</span>}
+                      </button>
                     ))}
                     {notRegistered.length === 0 && <span style={{ color: '#ccc', fontSize: '13px' }}>כל השחקנים רשומים</span>}
                   </div>
                 </div>
 
-                {tPlayers.length >= 4 ? (
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
-                      {tPlayers.length} שחקנים · {t.groups_count} בתים · {Math.floor(tPlayers.length / t.groups_count)} שחקנים בממוצע לבית
+                {isKnockoutOnly ? (
+                  /* Knockout-only start */
+                  tPlayers.length >= 2 ? (
+                    <div style={{ textAlign: 'center' }}>
+                      {(tPlayers.length & (tPlayers.length - 1)) !== 0 && (
+                        <div style={{ background: '#fef3c7', color: '#d97706', borderRadius: '10px', padding: '10px 16px', fontSize: '13px', marginBottom: '14px', display: 'inline-block' }}>
+                          ⚠️ {tPlayers.length} שחקנים — נא להוסיף עד {Math.pow(2, Math.ceil(Math.log2(tPlayers.length)))} (חזקה של 2)
+                        </div>
+                      )}
+                      <div style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
+                        {tPlayers.length} שחקנים · הגרלה אקראית
+                      </div>
+                      <button onClick={startKnockoutOnly} disabled={drawing || (tPlayers.length & (tPlayers.length - 1)) !== 0}
+                        style={{ ...pb, padding: '12px 32px', fontSize: '15px', background: '#7c3aed', boxShadow: '0 4px 14px rgba(124,58,237,0.25)', opacity: (drawing || (tPlayers.length & (tPlayers.length - 1)) !== 0) ? 0.5 : 1 }}>
+                        {drawing ? 'מגריל...' : '🎾 הגרל והתחל נוק-אאוט'}
+                      </button>
                     </div>
-                    <button onClick={drawGroups} disabled={drawing} style={{ ...pb, padding: '12px 32px', fontSize: '15px', boxShadow: '0 4px 14px rgba(26,71,42,0.25)', opacity: drawing ? 0.6 : 1 }}>
-                      {drawing ? 'מגריל...' : '🎲 הגרל בתים והתחל'}
-                    </button>
-                  </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', color: '#aaa', fontSize: '13px' }}>יש להוסיף לפחות 2 שחקנים</div>
+                  )
                 ) : (
-                  <div style={{ textAlign: 'center', color: '#aaa', fontSize: '13px' }}>יש להוסיף לפחות 4 שחקנים</div>
+                  /* Groups + knockout start */
+                  tPlayers.length >= 4 ? (
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
+                        {tPlayers.length} שחקנים · {t.groups_count} בתים · {Math.floor(tPlayers.length / t.groups_count)} שחקנים בממוצע לבית
+                      </div>
+                      <button onClick={drawGroups} disabled={drawing} style={{ ...pb, padding: '12px 32px', fontSize: '15px', boxShadow: '0 4px 14px rgba(26,71,42,0.25)', opacity: drawing ? 0.6 : 1 }}>
+                        {drawing ? 'מגריל...' : '🎲 הגרל בתים והתחל'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', color: '#aaa', fontSize: '13px' }}>יש להוסיף לפחות 4 שחקנים</div>
+                  )
                 )}
               </div>
             )}
 
             {/* ── Groups phase ── */}
-            {(t.status === 'groups' || t.status === 'knockout' || t.status === 'completed') && (
+            {!isKnockoutOnly && (t.status === 'groups' || t.status === 'knockout' || t.status === 'completed') && (
               <div>
                 <div style={{ fontWeight: '700', fontSize: '17px', color: '#333', marginBottom: '18px' }}>שלב הבתים</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginBottom: '28px' }}>
@@ -328,11 +398,9 @@ export default function TournamentsTab() {
                     const groupMatches = tMatches.filter(m => m.phase === 'group' && m.group_num === g)
                     return (
                       <div key={g} style={{ background: '#fff', border: '1px solid #e8ece8', borderRadius: '14px', overflow: 'hidden' }}>
-                        {/* Group header */}
                         <div style={{ background: '#1a472a', color: '#fff', padding: '10px 16px', fontWeight: '700', fontSize: '14px' }}>
                           בית {GROUP_NAMES[g - 1]}
                         </div>
-                        {/* Standings */}
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                           <thead>
                             <tr style={{ background: '#f9f9f9' }}>
@@ -356,7 +424,6 @@ export default function TournamentsTab() {
                             ))}
                           </tbody>
                         </table>
-                        {/* Group matches */}
                         <div style={{ padding: '10px 14px', borderTop: '1px solid #f0f0f0' }}>
                           {groupMatches.map(m => {
                             const isEditing = editingMatchId === m.id
@@ -378,30 +445,7 @@ export default function TournamentsTab() {
                                     <span style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>✓</span>
                                   )}
                                 </div>
-                                {isEditing && (
-                                  <div style={{ background: '#f9f9f9', border: '1px solid #e8ece8', borderRadius: '10px', padding: '12px', marginTop: '6px' }}>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                                      <div>
-                                        <label style={{ ...ls, fontSize: '11px' }}>תוצאה (אופציונלי)</label>
-                                        <input value={resultScore} onChange={e => setResultScore(e.target.value)} placeholder="6-4, 7-5" style={{ ...is, fontSize: '12px', padding: '7px 10px' }} />
-                                      </div>
-                                      <div>
-                                        <label style={{ ...ls, fontSize: '11px' }}>מנצח *</label>
-                                        <select value={resultWinner} onChange={e => setResultWinner(e.target.value)} style={{ ...is, fontSize: '12px', padding: '7px 10px' }}>
-                                          <option value="">בחר מנצח</option>
-                                          <option value={m.player1_id}>{pName(m.player1_id)}</option>
-                                          <option value={m.player2_id}>{pName(m.player2_id)}</option>
-                                        </select>
-                                      </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                                      <button onClick={() => setEditingMatchId(null)} style={{ ...ob, padding: '6px 12px', fontSize: '12px' }}>ביטול</button>
-                                      <button onClick={saveResult} disabled={!resultWinner || savingResult} style={{ ...pb, padding: '6px 14px', fontSize: '12px', opacity: (!resultWinner || savingResult) ? 0.6 : 1 }}>
-                                        {savingResult ? '...' : 'שמור'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
+                                {isEditing && <ResultForm m={m} fmt={fmt} resultScore={resultScore} setResultScore={setResultScore} resultWinner={resultWinner} setResultWinner={setResultWinner} savingResult={savingResult} saveResult={saveResult} cancel={() => setEditingMatchId(null)} pName={pName} is={is} ob={ob} pb={pb} ls={ls} />}
                               </div>
                             )
                           })}
@@ -411,7 +455,6 @@ export default function TournamentsTab() {
                   })}
                 </div>
 
-                {/* Advance to knockout button */}
                 {t.status === 'groups' && allGroupMatchesDone && (
                   <div style={{ textAlign: 'center', padding: '24px 0', borderTop: '1px solid #e8ece8' }}>
                     <div style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>
@@ -432,10 +475,9 @@ export default function TournamentsTab() {
 
             {/* ── Knockout phase ── */}
             {(t.status === 'knockout' || t.status === 'completed') && knockoutMatches.length > 0 && (
-              <div style={{ marginTop: '32px' }}>
+              <div style={{ marginTop: isKnockoutOnly ? 0 : '32px' }}>
                 <div style={{ fontWeight: '700', fontSize: '17px', color: '#333', marginBottom: '18px' }}>שלב נוק-אאוט</div>
 
-                {/* Champion banner */}
                 {t.status === 'completed' && (() => {
                   const finalMatch = knockoutMatches.find(m => m.round === 1)
                   const champion = finalMatch?.winner_id
@@ -448,12 +490,10 @@ export default function TournamentsTab() {
                   ) : null
                 })()}
 
-                {/* Bracket columns */}
                 <div style={{ overflowX: 'auto', paddingBottom: '12px' }}>
                   <div style={{ display: 'flex', gap: '20px', minWidth: 'fit-content' }}>
                     {knockoutRounds.map(round => (
                       <div key={round} style={{ flex: 1, minWidth: '200px' }}>
-                        {/* Round label */}
                         <div style={{
                           textAlign: 'center', fontSize: '12px', fontWeight: '700', color: round === 1 ? '#7c3aed' : '#888',
                           textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px', padding: '6px',
@@ -461,7 +501,6 @@ export default function TournamentsTab() {
                         }}>
                           {ROUND_NAMES[round] || `סיבוב ${round}`}
                         </div>
-                        {/* Matches in this round */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                           {knockoutMatches.filter(m => m.round === round).map(m => {
                             const isEditing = editingMatchId === m.id
@@ -470,21 +509,18 @@ export default function TournamentsTab() {
                             const canEnter = t.status === 'knockout' && m.status === 'pending' && m.player1_id && m.player2_id
                             return (
                               <div key={m.id} style={{ background: '#fff', border: `1px solid ${round === 1 ? '#c4b5fd' : '#e8ece8'}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                                {/* Player 1 */}
                                 <div style={{ padding: '10px 14px', background: isP1Win ? '#dcfce7' : '#fafafa', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ fontSize: '13px', fontWeight: isP1Win ? '700' : '400', color: isP1Win ? '#16a34a' : m.player1_id ? '#111' : '#ccc' }}>
                                     {m.player1_id ? pName(m.player1_id) : 'ממתין...'}
                                   </span>
                                   {isP1Win && <span>🏆</span>}
                                 </div>
-                                {/* Player 2 */}
                                 <div style={{ padding: '10px 14px', background: isP2Win ? '#dcfce7' : '#fafafa', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                   <span style={{ fontSize: '13px', fontWeight: isP2Win ? '700' : '400', color: isP2Win ? '#16a34a' : m.player2_id ? '#111' : '#ccc' }}>
                                     {m.player2_id ? pName(m.player2_id) : 'ממתין...'}
                                   </span>
                                   {isP2Win && <span>🏆</span>}
                                 </div>
-                                {/* Score or enter result */}
                                 {m.score && (
                                   <div style={{ padding: '5px 14px', fontSize: '11px', color: '#888', background: '#f9f9f9', borderTop: '1px solid #eee', textAlign: 'center' }}>{m.score}</div>
                                 )}
@@ -495,16 +531,7 @@ export default function TournamentsTab() {
                                 )}
                                 {isEditing && (
                                   <div style={{ padding: '10px 12px', background: '#f9f9f9', borderTop: '1px solid #eee' }}>
-                                    <input value={resultScore} onChange={e => setResultScore(e.target.value)} placeholder="6-4, 7-5" style={{ ...is, fontSize: '12px', padding: '6px 10px', marginBottom: '6px' }} />
-                                    <select value={resultWinner} onChange={e => setResultWinner(e.target.value)} style={{ ...is, fontSize: '12px', padding: '6px 10px', marginBottom: '8px' }}>
-                                      <option value="">מנצח...</option>
-                                      <option value={m.player1_id}>{pName(m.player1_id)}</option>
-                                      <option value={m.player2_id}>{pName(m.player2_id)}</option>
-                                    </select>
-                                    <div style={{ display: 'flex', gap: '6px' }}>
-                                      <button onClick={() => setEditingMatchId(null)} style={{ ...ob, flex: 1, padding: '6px', fontSize: '12px' }}>ביטול</button>
-                                      <button onClick={saveResult} disabled={!resultWinner || savingResult} style={{ ...pb, flex: 1, padding: '6px', fontSize: '12px', opacity: (!resultWinner || savingResult) ? 0.6 : 1 }}>שמור</button>
-                                    </div>
+                                    <ResultForm m={m} fmt={fmt} resultScore={resultScore} setResultScore={setResultScore} resultWinner={resultWinner} setResultWinner={setResultWinner} savingResult={savingResult} saveResult={saveResult} cancel={() => setEditingMatchId(null)} pName={pName} is={is} ob={ob} pb={pb} ls={ls} compact />
                                   </div>
                                 )}
                               </div>
@@ -524,6 +551,9 @@ export default function TournamentsTab() {
   }
 
   // ── Tournament list ──
+  const totalAdvancing = parseInt(createForm.groups_count) * parseInt(createForm.advance_per_group)
+  const isPowerOf2 = (totalAdvancing & (totalAdvancing - 1)) === 0
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -547,25 +577,47 @@ export default function TournamentsTab() {
               <label style={ls}>תאריך התחלה</label>
               <input type="date" value={createForm.start_date} onChange={e => setCreateForm(f => ({ ...f, start_date: e.target.value }))} style={is} />
             </div>
-            <div />
             <div>
-              <label style={ls}>מספר בתים</label>
-              <select value={createForm.groups_count} onChange={e => setCreateForm(f => ({ ...f, groups_count: e.target.value }))} style={is}>
-                {[2, 3, 4].map(n => <option key={n} value={n}>{n} בתים</option>)}
+              <label style={ls}>פורמט משחק</label>
+              <select value={createForm.match_format} onChange={e => setCreateForm(f => ({ ...f, match_format: e.target.value }))} style={is}>
+                <option value="bo1">סט אחד</option>
+                <option value="bo3">הטוב מ-3 סטים</option>
               </select>
             </div>
-            <div>
-              <label style={ls}>מתקדמים מכל בית</label>
-              <select value={createForm.advance_per_group} onChange={e => setCreateForm(f => ({ ...f, advance_per_group: e.target.value }))} style={is}>
-                {[1, 2].map(n => <option key={n} value={n}>{n} מתקדמים</option>)}
-              </select>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={ls}>מבנה תחרות</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {[['groups_knockout', 'בתים + נוק-אאוט'], ['knockout_only', 'נוק-אאוט בלבד']].map(([val, lbl]) => (
+                  <button key={val} type="button" onClick={() => setCreateForm(f => ({ ...f, mode: val }))} style={{
+                    flex: 1, padding: '10px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px', fontWeight: '600', border: '2px solid',
+                    borderColor: createForm.mode === val ? '#1a472a' : '#e0e7e0',
+                    background: createForm.mode === val ? '#f0f7f0' : '#fff',
+                    color: createForm.mode === val ? '#1a472a' : '#888',
+                  }}>{lbl}</button>
+                ))}
+              </div>
             </div>
-            <div style={{ gridColumn: '1 / -1', background: '#f0f7f0', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', color: '#555' }}>
-              סה"כ {parseInt(createForm.groups_count) * parseInt(createForm.advance_per_group)} שחקנים יתקדמו לנוק-אאוט
-              {(parseInt(createForm.groups_count) * parseInt(createForm.advance_per_group) & (parseInt(createForm.groups_count) * parseInt(createForm.advance_per_group) - 1)) !== 0 &&
-                <span style={{ color: '#dc2626', marginRight: '8px' }}>⚠️ לא חזקה של 2 — שנה את ההגדרות</span>
-              }
-            </div>
+
+            {createForm.mode === 'groups_knockout' && (
+              <>
+                <div>
+                  <label style={ls}>מספר בתים</label>
+                  <select value={createForm.groups_count} onChange={e => setCreateForm(f => ({ ...f, groups_count: e.target.value }))} style={is}>
+                    {[2, 3, 4].map(n => <option key={n} value={n}>{n} בתים</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={ls}>מתקדמים מכל בית</label>
+                  <select value={createForm.advance_per_group} onChange={e => setCreateForm(f => ({ ...f, advance_per_group: e.target.value }))} style={is}>
+                    {[1, 2].map(n => <option key={n} value={n}>{n} מתקדמים</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1', background: isPowerOf2 ? '#f0f7f0' : '#fef3c7', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', color: isPowerOf2 ? '#555' : '#d97706' }}>
+                  סה"כ {totalAdvancing} שחקנים יתקדמו לנוק-אאוט
+                  {!isPowerOf2 && <span style={{ fontWeight: '700', marginRight: '8px' }}>⚠️ לא חזקה של 2 — שנה את ההגדרות</span>}
+                </div>
+              </>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
             <button type="button" onClick={() => setShowCreate(false)} style={ob}>ביטול</button>
@@ -586,7 +638,9 @@ export default function TournamentsTab() {
                   <div style={{ fontWeight: '700', fontSize: '16px', color: '#111' }}>{t.name}</div>
                   {t.description && <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{t.description}</div>}
                   <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>
-                    {t.groups_count} בתים · {t.advance_per_group} מתקדמים
+                    {t.mode === 'knockout_only' ? 'נוק-אאוט בלבד' : `${t.groups_count} בתים · ${t.advance_per_group} מתקדמים`}
+                    {' · '}
+                    {t.match_format === 'bo3' ? 'הטוב מ-3' : 'סט אחד'}
                     {t.start_date && ` · ${new Date(t.start_date).toLocaleDateString('he-IL')}`}
                   </div>
                 </div>
@@ -598,6 +652,35 @@ export default function TournamentsTab() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function ResultForm({ m, fmt, resultScore, setResultScore, resultWinner, setResultWinner, savingResult, saveResult, cancel, pName, is, ob, pb, ls, compact }) {
+  const scoreHint = fmt === 'bo3' ? 'לדוג׳: 6-4, 3-6, 7-5' : 'לדוג׳: 6-4'
+  return (
+    <div style={{ background: compact ? 'transparent' : '#f9f9f9', border: compact ? 'none' : '1px solid #e8ece8', borderRadius: compact ? 0 : '10px', padding: compact ? '0' : '12px', marginTop: compact ? 0 : '6px' }}>
+      {!compact && <div style={{ fontSize: '11px', color: '#aaa', marginBottom: '8px' }}>{fmt === 'bo3' ? '🎾 הטוב מ-3 סטים' : '🎾 סט אחד'}</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+        <div>
+          <label style={{ ...ls, fontSize: '11px' }}>תוצאה {fmt === 'bo3' ? '(3 סטים)' : '(סט)'}</label>
+          <input value={resultScore} onChange={e => setResultScore(e.target.value)} placeholder={scoreHint} style={{ ...is, fontSize: '12px', padding: '7px 10px' }} />
+        </div>
+        <div>
+          <label style={{ ...ls, fontSize: '11px' }}>מנצח *</label>
+          <select value={resultWinner} onChange={e => setResultWinner(e.target.value)} style={{ ...is, fontSize: '12px', padding: '7px 10px' }}>
+            <option value="">בחר מנצח</option>
+            <option value={m.player1_id}>{pName(m.player1_id)}</option>
+            <option value={m.player2_id}>{pName(m.player2_id)}</option>
+          </select>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+        <button onClick={cancel} style={{ ...ob, padding: '6px 12px', fontSize: '12px' }}>ביטול</button>
+        <button onClick={saveResult} disabled={!resultWinner || savingResult} style={{ ...pb, padding: '6px 14px', fontSize: '12px', opacity: (!resultWinner || savingResult) ? 0.6 : 1 }}>
+          {savingResult ? '...' : 'שמור'}
+        </button>
+      </div>
     </div>
   )
 }
