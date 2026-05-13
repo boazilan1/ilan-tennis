@@ -9,6 +9,8 @@ import Signup from './pages/Signup'
 import Register from './pages/Register'
 import Admin from './pages/Admin'
 import Tournaments from './pages/Tournaments'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 function App() {
   return (
@@ -24,6 +26,8 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/tournaments" element={<Tournaments />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
           </Routes>
           <Footer />
         </div>
