@@ -24,7 +24,7 @@ const EMPTY_FORM = {
 export default function Admin() {
   const { user, isAdmin, loading } = useAuth()
   const navigate = useNavigate()
-  const [tab, setTab] = useState('enrollments')
+  const [tab, setTab] = useState('calendar')
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) navigate('/')
@@ -564,8 +564,7 @@ function CalendarTab() {
   const [loadingSession, setLoadingSession] = useState(false)
   const [activitySession, setActivitySession] = useState({ status: 'scheduled', notes: '' })
   const [savingSession, setSavingSession] = useState(false)
-  const [showAddPlayer, setShowAddPlayer] = useState(false)
-  const [addPlayerSearch, setAddPlayerSearch] = useState('')
+const [addPlayerSearch, setAddPlayerSearch] = useState('')
   const [addingPlayer, setAddingPlayer] = useState(false)
   const [eventNotes, setEventNotes] = useState('')
   const [eventStatus, setEventStatus] = useState('scheduled')
@@ -785,7 +784,55 @@ function CalendarTab() {
   const eventPresentCount = Object.values(eventPlayerMap).filter(v => v === true).length
 
   return (
-    <div style={{ display: 'flex', gap: '24px' }}>
+    <div>
+    <style>{`
+      .cal-layout { display: flex; gap: 24px; }
+      .side-panel-wrap {
+        width: 320px; flex-shrink: 0;
+      }
+      .side-panel-inner {
+        background: #fff; border-radius: 16px;
+        padding: 22px; align-self: flex-start;
+        position: sticky; top: 20px;
+        max-height: 85vh; overflow-y: auto;
+      }
+      .panel-backdrop { display: none; }
+      @media (max-width: 768px) {
+        .cal-layout { flex-direction: column; }
+        .side-panel-wrap {
+          width: 100% !important;
+          position: fixed !important;
+          bottom: 0; left: 0; right: 0;
+          z-index: 200;
+          max-height: 75vh;
+          overflow-y: auto;
+          border-radius: 20px 20px 0 0;
+          background: #fff;
+          box-shadow: 0 -8px 40px rgba(0,0,0,0.18);
+          padding: 0 0 env(safe-area-inset-bottom) 0;
+        }
+        .side-panel-inner {
+          position: static !important;
+          max-height: none !important;
+          border-radius: 0 !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding-top: 8px !important;
+        }
+        .panel-backdrop {
+          display: block;
+          position: fixed; inset: 0;
+          background: rgba(0,0,0,0.35);
+          z-index: 199;
+        }
+        .panel-handle {
+          width: 40px; height: 4px;
+          background: #ddd; border-radius: 2px;
+          margin: 10px auto 6px;
+        }
+      }
+    `}</style>
+    <div className="cal-layout">
       {/* ── Calendar column ── */}
       <div style={{ flex: 1, minWidth: 0 }}>
 
@@ -1009,14 +1056,14 @@ function CalendarTab() {
       </div>
 
       {/* ── Side Panel ── */}
+      {selected && <div className="panel-backdrop" onClick={() => setSelected(null)} />}
       {selected && (
-        <div style={{
-          width: '320px', flexShrink: 0, background: '#fff', borderRadius: '16px',
+        <div className="side-panel-wrap">
+        <div className="side-panel-inner" style={{
           border: `1px solid ${selected.type === 'event' ? '#ede9fe' : '#e8ece8'}`,
           boxShadow: `0 8px 30px ${selected.type === 'event' ? 'rgba(124,58,237,0.12)' : 'rgba(26,71,42,0.1)'}`,
-          padding: '22px', alignSelf: 'flex-start', position: 'sticky', top: '20px',
-          maxHeight: '85vh', overflowY: 'auto',
         }}>
+        <div className="panel-handle" />
           {/* Panel header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
             <div>
@@ -1037,97 +1084,82 @@ function CalendarTab() {
           {selected.type === 'activity' && (
             loadingSession ? <LoadingSpinner /> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Session status */}
+
+                {/* 1. Attendance — FIRST */}
                 <div>
-                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#888', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>סטטוס מפגש</div>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '800', color: '#1a472a' }}>נוכחות</div>
+                    <div style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '8px', padding: '3px 10px', fontSize: '14px', fontWeight: '700' }}>{presentCount}/{enrollments.length}</div>
+                  </div>
+                  {enrollments.length === 0 ? (
+                    <p style={{ color: '#ccc', textAlign: 'center', fontSize: '13px' }}>אין תלמידים רשומים</p>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+                        {enrollments.map(e => {
+                          const present = attendance[e.player_id]
+                          return (
+                            <button key={e.player_id} onClick={() => toggleAttendance(e.player_id)} style={{
+                              display: 'flex', alignItems: 'center', gap: '12px',
+                              background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#fafafa',
+                              border: `2px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
+                              borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                            }}>
+                              <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
+                              <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{e.player?.name}</div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <button onClick={saveAttendance} disabled={saving} style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '12px', padding: '13px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                        {saving ? 'שומר...' : '💾 שמור נוכחות'}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* 2. Add player from full list — always visible */}
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף מתאמן לחוג</div>
+                  <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} />
+                  <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
+                      <button key={p.id} onClick={() => addPlayerToActivity(p.id)} disabled={addingPlayer} style={{
+                        display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f7f0', border: '1px solid #c5ddc5',
+                        borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%', opacity: addingPlayer ? 0.6 : 1,
+                        color: '#1a472a', fontWeight: '600', fontSize: '14px',
+                      }}>
+                        <span>+</span>
+                        <span>{p.name}</span>
+                      </button>
+                    ))}
+                    {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).length === 0 && (
+                      <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כל המתאמנים כבר רשומים</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. Session details — last */}
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#aaa', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>סטטוס מפגש</div>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
                     {Object.entries(STATUS_EVENT).map(([key, val]) => (
                       <button key={key} onClick={() => setActivitySession(s => ({ ...s, status: key }))} style={{
                         background: activitySession.status === key ? val.color : '#fff',
                         color: activitySession.status === key ? '#fff' : val.color,
                         border: `1px solid ${activitySession.status === key ? val.color : '#ddd'}`,
                         borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
-                        boxShadow: activitySession.status === key ? `0 3px 8px ${val.color}40` : 'none',
                       }}>{val.label}</button>
                     ))}
                   </div>
-                </div>
-
-                {/* Session notes */}
-                <div>
-                  <label style={{ ...labelStyle, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '11px', color: '#aaa' }}>הערות מפגש</label>
                   <textarea value={activitySession.notes} onChange={e => setActivitySession(s => ({ ...s, notes: e.target.value }))}
-                    placeholder="הוסף הערות..." rows={2}
-                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', fontSize: '13px' }} />
+                    placeholder="הערות מפגש..." rows={2}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', fontSize: '13px', marginBottom: '8px' }} />
+                  <button onClick={saveActivitySession} disabled={savingSession} style={{ ...primaryBtn, width: '100%', opacity: savingSession ? 0.6 : 1, fontSize: '13px' }}>
+                    {savingSession ? 'שומר...' : 'שמור פרטי מפגש'}
+                  </button>
                 </div>
 
-                <button onClick={saveActivitySession} disabled={savingSession} style={{ ...primaryBtn, width: '100%', opacity: savingSession ? 0.6 : 1, fontSize: '13px' }}>
-                  {savingSession ? 'שומר...' : 'שמור פרטי מפגש'}
-                </button>
-
-                {/* Attendance */}
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>נוכחות</div>
-                    <div style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '8px', padding: '3px 10px', fontSize: '13px', fontWeight: '700' }}>{presentCount}/{enrollments.length}</div>
-                  </div>
-                  {enrollments.length === 0 ? (
-                    <p style={{ color: '#ccc', textAlign: 'center', fontSize: '13px' }}>אין תלמידים פעילים</p>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px' }}>
-                        {enrollments.map(e => {
-                          const present = attendance[e.player_id]
-                          return (
-                            <button key={e.player_id} onClick={() => toggleAttendance(e.player_id)} style={{
-                              display: 'flex', alignItems: 'center', gap: '10px',
-                              background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#fafafa',
-                              border: `1px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
-                              borderRadius: '10px', padding: '9px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
-                            }}>
-                              <span style={{ fontSize: '17px', minWidth: '22px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
-                              <div>
-                                <div style={{ fontWeight: '600', fontSize: '13px', color: '#111' }}>{e.player?.name}</div>
-                                <div style={{ fontSize: '11px', color: '#aaa' }}>יליד {e.player?.birth_year}</div>
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
-                      <button onClick={saveAttendance} disabled={saving} style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '9px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
-                        {saving ? 'שומר...' : 'שמור נוכחות'}
-                      </button>
-                    </>
-                  )}
-                </div>
-
-                {/* Add player */}
-                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
-                  {!showAddPlayer ? (
-                    <button onClick={() => setShowAddPlayer(true)} style={{ ...outlineBtn, width: '100%', color: '#1a472a', borderColor: '#c5ddc5', fontWeight: '600' }}>
-                      + הוסף מתאמן לחוג
-                    </button>
-                  ) : (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#555' }}>הוסף מתאמן</span>
-                        <button onClick={() => { setShowAddPlayer(false); setAddPlayerSearch('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: '16px' }}>✕</button>
-                      </div>
-                      <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '13px', marginBottom: '8px' }} />
-                      <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
-                          <button key={p.id} onClick={() => addPlayerToActivity(p.id)} disabled={addingPlayer} style={{
-                            display: 'flex', alignItems: 'center', gap: '8px', background: '#fafafa', border: '1px solid #eee',
-                            borderRadius: '8px', padding: '7px 10px', cursor: 'pointer', textAlign: 'right', width: '100%', opacity: addingPlayer ? 0.6 : 1,
-                          }}>
-                            <span style={{ fontSize: '13px', fontWeight: '500' }}>{p.name}</span>
-                            <span style={{ fontSize: '11px', color: '#bbb' }}>יליד {p.birth_year}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
             )
           )}
@@ -1237,7 +1269,9 @@ function CalendarTab() {
             </div>
           )}
         </div>
+        </div>
       )}
+    </div>
     </div>
   )
 }
