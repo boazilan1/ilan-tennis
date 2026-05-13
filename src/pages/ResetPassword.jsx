@@ -11,9 +11,11 @@ export default function ResetPassword() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    // Supabase sends access_token in the URL hash after redirect
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) setReady(true)
+    })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true)
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setReady(true)
     })
     return () => subscription.unsubscribe()
   }, [])
