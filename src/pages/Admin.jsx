@@ -1167,80 +1167,90 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
           {/* ── Event panel ── */}
           {selected.type === 'event' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {selected.data.description && <p style={{ margin: 0, fontSize: '14px', color: '#666', lineHeight: 1.5 }}>{selected.data.description}</p>}
 
-              <button onClick={() => openEditForm(selected.data)} style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd9fe', borderRadius: '10px', padding: '9px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>
-                ✏️ עריכת פרטי האירוע
-              </button>
-
-              {/* Status */}
+              {/* 1. Attendance — FIRST */}
               <div>
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#aaa', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>סטטוס</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  {Object.entries(STATUS_EVENT).map(([key, val]) => (
-                    <label key={key} style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      background: eventStatus === key ? val.bg : '#fafafa',
-                      border: `1px solid ${eventStatus === key ? val.color + '60' : '#eee'}`,
-                      borderRadius: '10px', padding: '9px 12px', cursor: 'pointer',
-                    }}>
-                      <input type="radio" name="evstatus" value={key} checked={eventStatus === key} onChange={() => setEventStatus(key)} />
-                      <span style={{ color: val.color, fontWeight: '600', fontSize: '13px' }}>{val.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label style={{ ...labelStyle, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '11px', color: '#aaa' }}>הערות</label>
-                <textarea value={eventNotes} onChange={e => setEventNotes(e.target.value)} placeholder="הוסף הערות..." rows={3}
-                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', fontSize: '13px' }} />
-              </div>
-
-              <button onClick={saveEventDetails} disabled={savingEvent} style={{ background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: savingEvent ? 0.6 : 1, boxShadow: '0 4px 12px rgba(124,58,237,0.25)' }}>
-                {savingEvent ? 'שומר...' : 'שמור'}
-              </button>
-
-              {/* Roster */}
-              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.5px' }}>מתאמנים</div>
-                  {eventPresentCount > 0 && <div style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '8px', padding: '3px 10px', fontSize: '12px', fontWeight: '700' }}>{eventPresentCount} נוכחים</div>}
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#7c3aed' }}>נוכחות</div>
+                  {eventPresentCount > 0 && <div style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '8px', padding: '3px 10px', fontSize: '14px', fontWeight: '700' }}>{eventPresentCount}/{eventRoster.size}</div>}
                 </div>
-                {loadingEventPlayers ? <p style={{ color: '#bbb', fontSize: '13px' }}>טוען...</p> :
-                  eventRoster.size === 0 ? <p style={{ color: '#ccc', fontSize: '13px', textAlign: 'center' }}>לא הוגדרו מתאמנים.<br />לחץ "עריכת פרטי האירוע" להוסיף.</p> :
-                  (() => {
-                    const rosterPlayers = allPlayers.filter(p => eventRoster.has(p.id) && (!playerSearch || p.name.includes(playerSearch)))
-                    return (
+                {loadingEventPlayers ? <p style={{ color: '#bbb', fontSize: '13px' }}>טוען...</p> : (() => {
+                  const rosterPlayers = allPlayers.filter(p => eventRoster.has(p.id) && (!playerSearch || p.name.includes(playerSearch)))
+                  return rosterPlayers.length === 0
+                    ? <p style={{ color: '#ccc', fontSize: '13px', textAlign: 'center' }}>אין מתאמנים ברשימה עדיין</p>
+                    : (
                       <>
-                        <input value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} placeholder="חיפוש..." style={{ ...inputStyle, fontSize: '13px', marginBottom: '8px' }} />
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '10px', maxHeight: '200px', overflowY: 'auto' }}>
+                        <input value={playerSearch} onChange={e => setPlayerSearch(e.target.value)} placeholder="חיפוש..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
                           {rosterPlayers.map(p => {
                             const present = eventPlayerMap[p.id]
                             return (
                               <button key={p.id} onClick={() => toggleEventPlayer(p.id)} style={{
-                                display: 'flex', alignItems: 'center', gap: '8px',
+                                display: 'flex', alignItems: 'center', gap: '12px',
                                 background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#fafafa',
-                                border: `1px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
-                                borderRadius: '10px', padding: '7px 10px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                                border: `2px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
+                                borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'right', width: '100%',
                               }}>
-                                <span style={{ fontSize: '15px', minWidth: '20px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
-                                <div>
-                                  <div style={{ fontSize: '13px', fontWeight: '600' }}>{p.name}</div>
-                                  <div style={{ fontSize: '11px', color: '#aaa' }}>יליד {p.birth_year}</div>
-                                </div>
+                                <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
+                                <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{p.name}</div>
                               </button>
                             )
                           })}
                         </div>
-                        <button onClick={saveEventPlayers} disabled={savingEventPlayers} style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '8px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: savingEventPlayers ? 0.6 : 1 }}>
-                          {savingEventPlayers ? 'שומר...' : 'שמור נוכחות'}
+                        <button onClick={saveEventPlayers} disabled={savingEventPlayers} style={{ width: '100%', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '12px', padding: '13px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', opacity: savingEventPlayers ? 0.6 : 1 }}>
+                          {savingEventPlayers ? 'שומר...' : '💾 שמור נוכחות'}
                         </button>
                       </>
                     )
-                  })()
-                }
+                })()}
+              </div>
+
+              {/* 2. Add to roster from full list — always visible */}
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף לרשימת האירוע</div>
+                <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} />
+                <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {allPlayers.filter(p => !eventRoster.has(p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
+                    <button key={p.id} onClick={async () => {
+                      await supabase.from('admin_event_roster').insert({ event_id: selected.data.id, player_id: p.id })
+                      setEventRoster(prev => new Set([...prev, p.id]))
+                    }} style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', background: '#f5f3ff', border: '1px solid #ddd9fe',
+                      borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                      color: '#7c3aed', fontWeight: '600', fontSize: '14px',
+                    }}>
+                      <span>+</span><span>{p.name}</span>
+                    </button>
+                  ))}
+                  {allPlayers.filter(p => !eventRoster.has(p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).length === 0 && (
+                    <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כולם כבר ברשימה</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 3. Event details — last */}
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                {selected.data.description && <p style={{ margin: '0 0 10px', fontSize: '13px', color: '#666', lineHeight: 1.5 }}>{selected.data.description}</p>}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                  {Object.entries(STATUS_EVENT).map(([key, val]) => (
+                    <button key={key} onClick={() => setEventStatus(key)} style={{
+                      background: eventStatus === key ? val.color : '#fff',
+                      color: eventStatus === key ? '#fff' : val.color,
+                      border: `1px solid ${eventStatus === key ? val.color : '#ddd'}`,
+                      borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '600',
+                    }}>{val.label}</button>
+                  ))}
+                </div>
+                <textarea value={eventNotes} onChange={e => setEventNotes(e.target.value)} placeholder="הערות..." rows={2}
+                  style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', fontSize: '13px', marginBottom: '8px' }} />
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <button onClick={saveEventDetails} disabled={savingEvent} style={{ flex: 1, background: '#7c3aed', color: '#fff', border: 'none', borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: savingEvent ? 0.6 : 1 }}>
+                    {savingEvent ? 'שומר...' : 'שמור'}
+                  </button>
+                  <button onClick={() => openEditForm(selected.data)} style={{ background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd9fe', borderRadius: '10px', padding: '10px 14px', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>
+                    ✏️
+                  </button>
+                </div>
               </div>
 
               {/* Delete */}
