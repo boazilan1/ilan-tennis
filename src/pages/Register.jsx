@@ -20,6 +20,7 @@ export default function Register() {
 
   const activityId = searchParams.get('activity')
 
+  const [allActivities, setAllActivities] = useState([])
   const [activity, setActivity] = useState(null)
   const [players, setPlayers] = useState([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
@@ -38,7 +39,10 @@ export default function Register() {
       return
     }
     if (!activityId) {
-      navigate('/activities')
+      supabase.from('activities').select('*').order('day_of_week').then(({ data }) => {
+        if (data) setAllActivities(data)
+        setLoading(false)
+      })
       return
     }
     async function fetchData() {
@@ -121,6 +125,35 @@ export default function Register() {
     return (
       <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
         <p style={{ color: '#888' }}>טוען...</p>
+      </main>
+    )
+  }
+
+  if (!activityId) {
+    return (
+      <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3', padding: '40px 20px' }}>
+        <div style={{ maxWidth: '560px', margin: '0 auto' }}>
+          <h1 style={{ color: '#1a472a', fontSize: '24px', fontWeight: '800', marginBottom: '6px' }}>הרשמה לחוג</h1>
+          <p style={{ color: '#888', marginBottom: '28px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {allActivities.map(a => (
+              <button key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
+                background: 'white', border: '1px solid #e8ece8', borderRight: '4px solid #1a472a',
+                borderRadius: '14px', padding: '18px 20px', cursor: 'pointer', textAlign: 'right',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '6px',
+              }}>
+                <div style={{ fontWeight: '800', fontSize: '17px', color: '#1a472a' }}>{a.name}</div>
+                {a.description && <div style={{ fontSize: '13px', color: '#666' }}>{a.description}</div>}
+                <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#555', flexWrap: 'wrap', marginTop: '2px' }}>
+                  <span>📅 יום {DAYS_HE[a.day_of_week]}</span>
+                  {a.time && <span>🕐 {a.time}</span>}
+                  {a.price && <span>💰 ₪{a.price} לחודש</span>}
+                </div>
+              </button>
+            ))}
+            {allActivities.length === 0 && <p style={{ color: '#bbb', textAlign: 'center' }}>אין חוגים זמינים כרגע</p>}
+          </div>
+        </div>
       </main>
     )
   }

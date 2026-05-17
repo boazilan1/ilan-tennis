@@ -18,7 +18,7 @@ const STATUS_LABELS = {
 
 const EMPTY_FORM = {
   name: '', description: '', day_of_week: 'sunday',
-  time: '', price: '', max_students: '', payment_link: '',
+  time: '', price: '', max_students: '', payment_link: '', image_url: '',
 }
 
 export default function Admin() {
@@ -439,7 +439,7 @@ function ActivitiesTab() {
 
   function openNew() { setForm(EMPTY_FORM); setEditing('new'); setError('') }
   function openEdit(a) {
-    setForm({ name: a.name || '', description: a.description || '', day_of_week: a.day_of_week || 'sunday', time: a.time || '', price: a.price != null ? String(a.price) : '', max_students: a.max_students != null ? String(a.max_students) : '', payment_link: a.payment_link || '' })
+    setForm({ name: a.name || '', description: a.description || '', day_of_week: a.day_of_week || 'sunday', time: a.time || '', price: a.price != null ? String(a.price) : '', max_students: a.max_students != null ? String(a.max_students) : '', payment_link: a.payment_link || '', image_url: a.image_url || '' })
     setEditing(a); setError('')
   }
   function closeForm() { setEditing(null); setError('') }
@@ -452,7 +452,7 @@ function ActivitiesTab() {
     if (!form.time.trim()) { setError('יש להזין שעה'); return }
     if (!form.price || isNaN(Number(form.price))) { setError('יש להזין מחיר תקין'); return }
     setSaving(true)
-    const payload = { name: form.name.trim(), description: form.description.trim() || null, day_of_week: form.day_of_week, time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null }
+    const payload = { name: form.name.trim(), description: form.description.trim() || null, day_of_week: form.day_of_week, time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null, image_url: form.image_url.trim() || null }
     const res = editing === 'new' ? await supabase.from('activities').insert(payload) : await supabase.from('activities').update(payload).eq('id', editing.id)
     if (res.error) { setError('שגיאה בשמירה') } else { await fetchActivities(); closeForm() }
     setSaving(false)
@@ -493,6 +493,13 @@ function ActivitiesTab() {
               <label style={labelStyle}>קישור לתשלום</label>
               <input name="payment_link" value={form.payment_link} onChange={handleChange} placeholder="https://..." style={inputStyle} />
               <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = קישור כללי של האקדמיה</div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>קישור לתמונה</label>
+              <input name="image_url" value={form.image_url} onChange={handleChange} placeholder="https://example.com/image.jpg" style={inputStyle} />
+              {form.image_url && (
+                <img src={form.image_url} alt="תצוגה מקדימה" style={{ marginTop: '8px', width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #eee' }} />
+              )}
             </div>
             {error && <div style={{ gridColumn: '1 / -1', background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '13px' }}>{error}</div>}
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
