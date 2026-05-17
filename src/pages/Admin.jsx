@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import TournamentsTab from './AdminTournaments'
+import AdminSections from './AdminSections'
+import AdminContact from './AdminContact'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -44,8 +46,10 @@ export default function Admin() {
     { key: 'enrollments', label: 'הרשמות' },
     { key: 'trainees',    label: 'מתאמנים' },
     { key: 'activities',  label: 'חוגים' },
-    { key: 'calendar',     label: 'יומן' },
-    { key: 'tournaments',  label: 'תחרויות' },
+    { key: 'calendar',    label: 'יומן' },
+    { key: 'tournaments', label: 'תחרויות' },
+    { key: 'sections',    label: 'תוכן' },
+    { key: 'contact',     label: 'פניות' },
   ]
 
   return (
@@ -86,6 +90,8 @@ export default function Admin() {
         {tab === 'activities'  && <ActivitiesTab />}
         {tab === 'calendar'    && <CalendarTab />}
         {tab === 'tournaments' && <TournamentsTab />}
+        {tab === 'sections'    && <AdminSections />}
+        {tab === 'contact'     && <AdminContact />}
       </div>
     </main>
   )
@@ -929,12 +935,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
         {viewMode === 'week' && (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <button onClick={() => { setWeekOffset(w => w - 1); setSelected(null) }} style={navBtn}>◀ קודם</button>
+              <button onClick={() => { setWeekOffset(w => w - 1); setSelected(null) }} style={navBtn}>קודם ▶</button>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontWeight: '700', color: '#1a472a', fontSize: '15px' }}>{weekLabel}</div>
                 {weekOffset !== 0 && <button onClick={() => { setWeekOffset(0); setSelected(null) }} style={{ background: 'none', border: 'none', color: '#999', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' }}>היום</button>}
               </div>
-              <button onClick={() => { setWeekOffset(w => w + 1); setSelected(null) }} style={navBtn}>הבא ▶</button>
+              <button onClick={() => { setWeekOffset(w => w + 1); setSelected(null) }} style={navBtn}>◀ הבא</button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {weekDays.map(({ key, date }) => {
@@ -1010,12 +1016,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
           return (
             <>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <button onClick={() => { setMonthOffset(m => m - 1); setSelected(null) }} style={navBtn}>◀ קודם</button>
+                <button onClick={() => { setMonthOffset(m => m - 1); setSelected(null) }} style={navBtn}>קודם ▶</button>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontWeight: '700', color: '#1a472a', fontSize: '15px' }}>{mLabel}</div>
                   {monthOffset !== 0 && <button onClick={() => { setMonthOffset(0); setSelected(null) }} style={{ background: 'none', border: 'none', color: '#999', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline' }}>החודש</button>}
                 </div>
-                <button onClick={() => { setMonthOffset(m => m + 1); setSelected(null) }} style={navBtn}>הבא ▶</button>
+                <button onClick={() => { setMonthOffset(m => m + 1); setSelected(null) }} style={navBtn}>◀ הבא</button>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '4px' }}>
                 {DAYS_ORDER.map(d => <div key={d} style={{ textAlign: 'center', fontSize: '11px', color: '#aaa', fontWeight: '700', padding: '4px' }}>{DAYS_HE[d]}</div>)}

@@ -11,6 +11,7 @@ import Admin from './pages/Admin'
 import Tournaments from './pages/Tournaments'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
+import Contact from './pages/Contact'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/tournaments" element={<Tournaments />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/contact" element={<Contact />} />
           </Routes>
           <Footer />
         </div>
