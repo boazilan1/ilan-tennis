@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import ImageUpload from '../components/ImageUpload'
 
 const COLOR_THEMES = [
   { label: 'ירוק', color: '#1a472a', bg: '#f0f7f0', border: '#c5ddc5' },
@@ -147,11 +148,8 @@ export default function AdminSections() {
 
               {/* Image */}
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={labelStyle}>קישור לתמונה</label>
-                <input value={form.image_url} onChange={e => setForm(f => ({ ...f, image_url: e.target.value }))} placeholder="https://..." style={inputStyle} />
-                {form.image_url && (
-                  <img src={form.image_url} alt="" style={{ marginTop: '8px', width: '100%', maxHeight: '200px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #eee' }} />
-                )}
+                <label style={labelStyle}>תמונה</label>
+                <ImageUpload value={form.image_url} onChange={url => setForm(f => ({ ...f, image_url: url }))} folder="sections" />
               </div>
 
               {/* Link */}

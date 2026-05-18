@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import TournamentsTab from './AdminTournaments'
 import AdminSections from './AdminSections'
 import AdminContact from './AdminContact'
+import ImageUpload from '../components/ImageUpload'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -501,11 +502,8 @@ function ActivitiesTab() {
               <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = קישור כללי של האקדמיה</div>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>קישור לתמונה</label>
-              <input name="image_url" value={form.image_url} onChange={handleChange} placeholder="https://example.com/image.jpg" style={inputStyle} />
-              {form.image_url && (
-                <img src={form.image_url} alt="תצוגה מקדימה" style={{ marginTop: '8px', width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #eee' }} />
-              )}
+              <label style={labelStyle}>תמונה</label>
+              <ImageUpload value={form.image_url} onChange={url => setForm(f => ({ ...f, image_url: url }))} folder="activities" />
             </div>
             {error && <div style={{ gridColumn: '1 / -1', background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '13px' }}>{error}</div>}
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
