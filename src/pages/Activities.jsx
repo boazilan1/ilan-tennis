@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import SectionCurve from '../components/SectionCurve'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -11,14 +12,27 @@ export default function Activities() {
   const [sections, setSections] = useState([])
   const [activities, setActivities] = useState([])
   const [loading, setLoading] = useState(true)
+  const [heroTitle, setHeroTitle] = useState('הפעילויות שלנו')
+  const [heroTitleSize, setHeroTitleSize] = useState(30)
+  const [heroSubtitle, setHeroSubtitle] = useState('אימון טניס מקצועי בציפורי, גבעת זאב ובתי ספר באזור ירושלים')
+  const [heroSubtitleSize, setHeroSubtitleSize] = useState(16)
 
   useEffect(() => {
     Promise.all([
       supabase.from('activity_sections').select('*').order('sort_order'),
-      supabase.from('activities').select('*').order('day_of_week'),
-    ]).then(([secRes, actRes]) => {
+      supabase.from('activities').select('*').order('sort_order').order('day_of_week'),
+      supabase.from('site_settings').select('key, value').in('key', ['activities_hero_title', 'activities_hero_title_size', 'activities_hero_subtitle', 'activities_hero_subtitle_size']),
+    ]).then(([secRes, actRes, setRes]) => {
       if (secRes.data) setSections(secRes.data)
       if (actRes.data) setActivities(actRes.data)
+      if (setRes.data) {
+        setRes.data.forEach(r => {
+          if (r.key === 'activities_hero_title' && r.value) setHeroTitle(r.value)
+          if (r.key === 'activities_hero_title_size' && r.value) setHeroTitleSize(Number(r.value))
+          if (r.key === 'activities_hero_subtitle' && r.value) setHeroSubtitle(r.value)
+          if (r.key === 'activities_hero_subtitle_size' && r.value) setHeroSubtitleSize(Number(r.value))
+        })
+      }
       setLoading(false)
     })
   }, [])
@@ -29,17 +43,17 @@ export default function Activities() {
       {/* Hero */}
       <div style={{
         background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
-        color: 'white', textAlign: 'center', padding: '52px 24px 44px',
+        color: 'white', textAlign: 'center', padding: '52px 24px 60px',
+        position: 'relative',
       }}>
-        <h1 style={{ fontSize: '30px', fontWeight: '800', margin: '0 0 10px', letterSpacing: '-0.5px' }}>הפעילויות שלנו</h1>
-        <p style={{ opacity: 0.85, fontSize: '16px', margin: '0 0 28px' }}>
-          אימון טניס מקצועי בציפורי, גבעת זאב ובתי ספר באזור ירושלים
-        </p>
+        <h1 style={{ fontSize: heroTitleSize + 'px', fontWeight: '800', margin: '0 0 10px', letterSpacing: '-0.5px' }}>{heroTitle}</h1>
+        <p style={{ opacity: 0.85, fontSize: heroSubtitleSize + 'px', margin: '0 0 28px' }}>{heroSubtitle}</p>
         <Link to="/register" style={{
           background: 'white', color: '#1a472a',
           padding: '12px 32px', borderRadius: '30px',
           textDecoration: 'none', fontWeight: '700', fontSize: '15px',
         }}>הרשמה לחוג</Link>
+        <SectionCurve fill="#f3f6f3" />
       </div>
 
       {/* Dynamic sections */}
@@ -51,7 +65,7 @@ export default function Activities() {
               boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #eee',
             }}>
               {s.image_url && (
-                <img src={s.image_url} alt={s.title} style={{ width: '100%', maxHeight: '260px', objectFit: 'cover', display: 'block' }} />
+                <img src={s.image_url} alt={s.title} style={{ width: '100%', height: (s.image_height || 260) + 'px', objectFit: s.image_fit || 'cover', display: 'block' }} />
               )}
               <div style={{ background: s.bg_hex || '#f0f7f0', borderBottom: `1px solid ${s.border_hex || '#c5ddc5'}`, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: '14px' }}>
                 <span style={{ fontSize: '30px' }}>{s.icon}</span>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 const inputStyle = {
@@ -12,6 +12,25 @@ export default function Contact() {
   const [submitting, setSubmitting] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
+  const [heroTitle, setHeroTitle] = useState('יצירת קשר')
+  const [heroTitleSize, setHeroTitleSize] = useState(28)
+  const [heroSubtitle, setHeroSubtitle] = useState('נשמח לענות על כל שאלה')
+  const [heroSubtitleSize, setHeroSubtitleSize] = useState(15)
+  const [ntfyTopic, setNtfyTopic] = useState('')
+
+  useEffect(() => {
+    supabase.from('site_settings').select('key, value')
+      .in('key', ['contact_hero_title', 'contact_hero_title_size', 'contact_hero_subtitle', 'contact_hero_subtitle_size', 'notify_ntfy_topic'])
+      .then(({ data }) => {
+        data?.forEach(r => {
+          if (r.key === 'contact_hero_title' && r.value) setHeroTitle(r.value)
+          if (r.key === 'contact_hero_title_size' && r.value) setHeroTitleSize(Number(r.value))
+          if (r.key === 'contact_hero_subtitle' && r.value) setHeroSubtitle(r.value)
+          if (r.key === 'contact_hero_subtitle_size' && r.value) setHeroSubtitleSize(Number(r.value))
+          if (r.key === 'notify_ntfy_topic') setNtfyTopic(r.value || '')
+        })
+      })
+  }, [])
 
   function handleChange(e) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -29,6 +48,17 @@ export default function Contact() {
       message: form.message.trim() || null,
     })
     if (err) { setError('אירעה שגיאה, נסה שוב'); setSubmitting(false); return }
+    if (ntfyTopic) {
+      fetch(`https://ntfy.sh/${ntfyTopic}`, {
+        method: 'POST',
+        body: `${form.name} | ${form.phone || form.email}`,
+        headers: {
+          'Title': 'פנייה חדשה - אילן טניס 🎾',
+          'Priority': 'high',
+          'Tags': 'tennis',
+        },
+      }).catch(() => {})
+    }
     setSent(true)
     setSubmitting(false)
   }
@@ -39,8 +69,8 @@ export default function Contact() {
         background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
         color: 'white', textAlign: 'center', padding: '52px 24px 44px',
       }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 8px' }}>יצירת קשר</h1>
-        <p style={{ opacity: 0.85, fontSize: '15px', margin: 0 }}>נשמח לענות על כל שאלה</p>
+        <h1 style={{ fontSize: heroTitleSize + 'px', fontWeight: '800', margin: '0 0 8px' }}>{heroTitle}</h1>
+        <p style={{ opacity: 0.85, fontSize: heroSubtitleSize + 'px', margin: 0 }}>{heroSubtitle}</p>
       </div>
 
       <div style={{ maxWidth: '520px', margin: '40px auto', padding: '0 20px 60px' }}>

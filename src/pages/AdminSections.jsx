@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import ImageUpload from '../components/ImageUpload'
+import { ImageControls } from '../components/ImageDisplay'
 
 const COLOR_THEMES = [
   { label: 'ירוק', color: '#1a472a', bg: '#f0f7f0', border: '#c5ddc5' },
@@ -14,7 +15,7 @@ const COLOR_THEMES = [
 const EMPTY = {
   title: '', subtitle: '', icon: '🎾',
   color_hex: '#1a472a', bg_hex: '#f0f7f0', border_hex: '#c5ddc5',
-  content: '', image_url: '', link_url: '', link_label: '',
+  content: '', image_url: '', image_fit: 'cover', image_height: 260, link_url: '', link_label: '',
 }
 
 const inputStyle = {
@@ -48,7 +49,7 @@ export default function AdminSections() {
     setForm({
       title: s.title || '', subtitle: s.subtitle || '', icon: s.icon || '🎾',
       color_hex: s.color_hex || '#1a472a', bg_hex: s.bg_hex || '#f0f7f0', border_hex: s.border_hex || '#c5ddc5',
-      content: s.content || '', image_url: s.image_url || '',
+      content: s.content || '', image_url: s.image_url || '', image_fit: s.image_fit || 'cover', image_height: s.image_height || 260,
       link_url: s.link_url || '', link_label: s.link_label || '',
     })
     setEditing(s)
@@ -68,6 +69,8 @@ export default function AdminSections() {
       color_hex: form.color_hex, bg_hex: form.bg_hex, border_hex: form.border_hex,
       content: form.content.trim() || null,
       image_url: form.image_url.trim() || null,
+      image_fit: form.image_fit || 'cover',
+      image_height: Number(form.image_height) || 260,
       link_url: form.link_url.trim() || null,
       link_label: form.link_label.trim() || null,
     }
@@ -150,6 +153,13 @@ export default function AdminSections() {
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={labelStyle}>תמונה</label>
                 <ImageUpload value={form.image_url} onChange={url => setForm(f => ({ ...f, image_url: url }))} folder="sections" />
+                <ImageControls
+                  imageUrl={form.image_url}
+                  fit={form.image_fit}
+                  height={form.image_height}
+                  onFitChange={v => setForm(f => ({ ...f, image_fit: v }))}
+                  onHeightChange={v => setForm(f => ({ ...f, image_height: v }))}
+                />
               </div>
 
               {/* Link */}

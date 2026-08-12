@@ -12,6 +12,8 @@ import Tournaments from './pages/Tournaments'
 import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 import Contact from './pages/Contact'
+import DynamicPage from './pages/DynamicPage'
+import Nokdim from './pages/Nokdim'
 
 function App() {
   return (
@@ -30,6 +32,9 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/contact" element={<Contact />} />
+            <Route path="/נוקדים" element={<Nokdim />} />
+            <Route path="/nokdim" element={<Nokdim />} />
+            <Route path="/page/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer />
         </div>

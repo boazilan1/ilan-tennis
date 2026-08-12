@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -8,6 +8,18 @@ export default function Header() {
   const navigate = useNavigate()
   const { user, profile, isAdmin } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [dynamicPages, setDynamicPages] = useState([])
+  const [logoText, setLogoText] = useState('אילן טניס')
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('pages').select('title, slug').order('sort_order'),
+      supabase.from('site_settings').select('value').eq('key', 'header_logo_text').single(),
+    ]).then(([pagesRes, logoRes]) => {
+      if (pagesRes.data) setDynamicPages(pagesRes.data)
+      if (logoRes.data?.value) setLogoText(logoRes.data.value)
+    })
+  }, [])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -18,7 +30,9 @@ export default function Header() {
   const navLinks = [
     { to: '/', label: 'בית' },
     { to: '/activities', label: 'פעילויות' },
+    { to: '/נוקדים', label: 'נוקדים' },
     { to: '/tournaments', label: 'תחרויות' },
+    ...dynamicPages.map(p => ({ to: `/page/${p.slug}`, label: p.title })),
     { to: '/register', label: 'הרשמה לחוג' },
     ...(isAdmin ? [{ to: '/admin', label: '⚙️ ניהול' }] : []),
   ]
@@ -36,7 +50,7 @@ export default function Header() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
         <Link to="/" style={{ textDecoration: 'none', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }} onClick={() => setMenuOpen(false)}>
           <span style={{ fontSize: '28px' }}>🎾</span>
-          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>אילן טניס</span>
+          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>{logoText}</span>
         </Link>
 
         {/* Desktop nav */}

@@ -5,7 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import TournamentsTab from './AdminTournaments'
 import AdminSections from './AdminSections'
 import AdminContact from './AdminContact'
-import ImageUpload from '../components/ImageUpload'
+import AdminPages from './AdminPages'
+import AdminSettings from './AdminSettings'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -50,7 +51,9 @@ export default function Admin() {
     { key: 'calendar',    label: 'יומן' },
     { key: 'tournaments', label: 'תחרויות' },
     { key: 'sections',    label: 'תוכן' },
+    { key: 'pages',       label: 'דפים' },
     { key: 'contact',     label: 'פניות' },
+    { key: 'settings',    label: 'הגדרות' },
   ]
 
   return (
@@ -92,7 +95,9 @@ export default function Admin() {
         {tab === 'calendar'    && <CalendarTab />}
         {tab === 'tournaments' && <TournamentsTab />}
         {tab === 'sections'    && <AdminSections />}
+        {tab === 'pages'       && <AdminPages />}
         {tab === 'contact'     && <AdminContact />}
+        {tab === 'settings'    && <AdminSettings />}
       </div>
     </main>
   )
@@ -439,9 +444,21 @@ function ActivitiesTab() {
 
   async function fetchActivities() {
     setLoading(true)
-    const { data } = await supabase.from('activities').select('*').order('day_of_week')
+    const { data } = await supabase.from('activities').select('*').order('sort_order').order('day_of_week')
     if (data) setActivities(data)
     setLoading(false)
+  }
+
+  async function moveActivity(id, dir) {
+    const idx = activities.findIndex(a => a.id === id)
+    const swapIdx = idx + dir
+    if (swapIdx < 0 || swapIdx >= activities.length) return
+    const a = activities[idx], b = activities[swapIdx]
+    await Promise.all([
+      supabase.from('activities').update({ sort_order: b.sort_order }).eq('id', a.id),
+      supabase.from('activities').update({ sort_order: a.sort_order }).eq('id', b.id),
+    ])
+    await fetchActivities()
   }
 
   function openNew() { setForm(EMPTY_FORM); setEditing('new'); setError('') }
@@ -460,7 +477,8 @@ function ActivitiesTab() {
     if (!form.price || isNaN(Number(form.price))) { setError('יש להזין מחיר תקין'); return }
     setSaving(true)
     const payload = { name: form.name.trim(), description: form.description.trim() || null, day_of_week: form.day_of_week, time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null, image_url: form.image_url.trim() || null }
-    const res = editing === 'new' ? await supabase.from('activities').insert(payload) : await supabase.from('activities').update(payload).eq('id', editing.id)
+    const maxOrder = activities.length ? Math.max(...activities.map(a => a.sort_order || 0)) : 0
+    const res = editing === 'new' ? await supabase.from('activities').insert({ ...payload, sort_order: maxOrder + 1 }) : await supabase.from('activities').update(payload).eq('id', editing.id)
     if (res.error) { setError('שגיאה בשמירה') } else { await fetchActivities(); closeForm() }
     setSaving(false)
   }
@@ -501,10 +519,6 @@ function ActivitiesTab() {
               <input name="payment_link" value={form.payment_link} onChange={handleChange} placeholder="https://..." style={inputStyle} />
               <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = קישור כללי של האקדמיה</div>
             </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>תמונה</label>
-              <ImageUpload value={form.image_url} onChange={url => setForm(f => ({ ...f, image_url: url }))} folder="activities" />
-            </div>
             {error && <div style={{ gridColumn: '1 / -1', background: '#fee2e2', color: '#dc2626', padding: '10px 14px', borderRadius: '10px', fontSize: '13px' }}>{error}</div>}
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button type="button" onClick={closeForm} style={outlineBtn}>ביטול</button>
@@ -530,6 +544,10 @@ function ActivitiesTab() {
               </div>
               <div style={{ fontSize: '12px', fontWeight: '600', color: a.payment_link ? '#16a34a' : '#ccc' }}>
                 {a.payment_link ? '🔗 קישור תשלום' : '🔗 ללא קישור'}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                <button onClick={() => moveActivity(a.id, -1)} disabled={activities.indexOf(a) === 0} style={{ background: '#f5f5f5', border: 'none', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', opacity: activities.indexOf(a) === 0 ? 0.3 : 1 }}>▲</button>
+                <button onClick={() => moveActivity(a.id, 1)} disabled={activities.indexOf(a) === activities.length - 1} style={{ background: '#f5f5f5', border: 'none', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', opacity: activities.indexOf(a) === activities.length - 1 ? 0.3 : 1 }}>▼</button>
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => openEdit(a)} style={outlineBtn}>עריכה</button>

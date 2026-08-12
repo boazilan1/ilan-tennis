@@ -325,7 +325,7 @@ export default function Tournaments() {
     <main style={{ maxWidth: 900, margin: '40px auto', padding: '0 20px' }} dir="rtl">
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: '800', color: '#111' }}>תחרויות 🎾</h1>
-        <p style={{ margin: '6px 0 0', color: '#888', fontSize: 15 }}>תוצאות ולוחות תחרויות האקדמיה</p>
+        <p style={{ margin: '6px 0 0', color: '#888', fontSize: 15 }}>תוצאות ולוחות תחרויות</p>
       </div>
 
       {tournaments.length === 0 ? (
