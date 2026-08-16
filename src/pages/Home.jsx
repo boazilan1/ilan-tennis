@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import SectionCurve from '../components/SectionCurve'
+import Icon from '../components/Icon'
 
 const DEFAULTS = {
   home_hero_title: 'אילן טניס', home_hero_title_size: '36',
@@ -11,14 +12,21 @@ const DEFAULTS = {
   home_cta_subtitle: 'הצטרפו אלינו — בחרו חוג והירשמו עוד היום',
   home_cta_button: 'לכל הפעילויות',
   home_locations_title: 'היכן אנחנו פועלים',
-  home_f1_icon: '🏆', home_f1_title: 'אימון מקצועי', home_f1_text: 'תוכניות אימון מותאמות אישית לכל שחקן, מתחילים ועד מתקדמים',
-  home_f2_icon: '👥', home_f2_title: 'לכל הגילאים', home_f2_text: 'ילדים, נוער ומבוגרים — קבוצות לפי גיל ורמה',
-  home_f3_icon: '📍', home_f3_title: 'מספר מיקומים', home_f3_text: 'פעילות בציפורי, גבעת זאב ובתי ספר באזור ירושלים',
-  home_f4_icon: '🎓', home_f4_title: 'מאמן מוסמך', home_f4_text: 'הכשרה מקצועית עם דגש על פיתוח גופני, תיאום ושמחת המשחק',
-  home_l1_icon: '🎾', home_l1_title: 'ציפורי', home_l1_text: 'שני מגרשי טניס בסמוך להר הרצל — אווירה מקצועית וספורטיבית',
-  home_l2_icon: '📍', home_l2_title: 'גבעת זאב', home_l2_text: 'פעילות טניס לתושבי האזור — קבוצות לילדים ולנוער, מתחילים ומתקדמים',
-  home_l3_icon: '🏫', home_l3_title: 'בתי ספר בירושלים', home_l3_text: 'תוכניות ניידות עם ציוד מותאם — רשתות, כדורים ומחבטים',
-  home_l4_icon: '🏕️', home_l4_title: 'מחנות ותחרויות', home_l4_text: 'מחנות אימון עצימים ותחרויות לשחקנים בכל הרמות',
+  home_f1_icon: 'trophy', home_f1_title: 'אימון מקצועי', home_f1_text: 'תוכניות אימון מותאמות אישית לכל שחקן, מתחילים ועד מתקדמים',
+  home_f2_icon: 'users', home_f2_title: 'לכל הגילאים', home_f2_text: 'ילדים, נוער ומבוגרים — קבוצות לפי גיל ורמה',
+  home_f3_icon: 'pin', home_f3_title: 'מספר מיקומים', home_f3_text: 'פעילות בציפורי, גבעת זאב ובתי ספר באזור ירושלים',
+  home_f4_icon: 'cap', home_f4_title: 'מאמן מוסמך', home_f4_text: 'הכשרה מקצועית עם דגש על פיתוח גופני, תיאום ושמחת המשחק',
+  home_l1_icon: 'ball', home_l1_title: 'ציפורי', home_l1_text: 'שני מגרשי טניס בסמוך להר הרצל — אווירה מקצועית וספורטיבית',
+  home_l2_icon: 'pin', home_l2_title: 'גבעת זאב', home_l2_text: 'פעילות טניס לתושבי האזור — קבוצות לילדים ולנוער, מתחילים ומתקדמים',
+  home_l3_icon: 'school', home_l3_title: 'בתי ספר בירושלים', home_l3_text: 'תוכניות ניידות עם ציוד מותאם — רשתות, כדורים ומחבטים',
+  home_l4_icon: 'tent', home_l4_title: 'מחנות ותחרויות', home_l4_text: 'מחנות אימון עצימים ותחרויות לשחקנים בכל הרמות',
+}
+
+const ICON_NAMES = new Set(['ball', 'trophy', 'users', 'pin', 'cap', 'school', 'tent', 'calendar', 'clock', 'tag', 'mail', 'check'])
+function FeatureIcon({ value, size, color }) {
+  return ICON_NAMES.has(value)
+    ? <Icon name={value} size={size} color={color} />
+    : <span style={{ fontSize: size }}>{value}</span>
 }
 
 export default function Home() {
@@ -48,7 +56,7 @@ export default function Home() {
         color: 'white', textAlign: 'center', padding: '80px 24px 70px',
         position: 'relative',
       }}>
-        <div style={{ fontSize: '64px', marginBottom: '12px' }}>🎾</div>
+        <div style={{ marginBottom: '16px' }}><Icon name="ball" size={52} color="rgba(255,255,255,0.9)" /></div>
         <h1 style={{ fontSize: gs('home_hero_title_size') + 'px', fontWeight: '800', margin: '0 0 14px', letterSpacing: '-0.5px' }}>
           {g('home_hero_title')}
         </h1>
@@ -71,7 +79,11 @@ export default function Home() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
           {features.map((f, i) => (
             <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0' }}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>{f.icon}</div>
+              <div style={{
+                width: '64px', height: '64px', borderRadius: '50%', background: 'var(--sand-light)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 14px',
+              }}><FeatureIcon value={f.icon} size={28} color="#1a472a" /></div>
               <h3 style={{ margin: '0 0 8px', color: '#1a472a', fontSize: '16px', fontWeight: '700' }}>{f.title}</h3>
               <p style={{ margin: 0, color: '#666', fontSize: '13px', lineHeight: 1.6 }}>{f.text}</p>
             </div>
@@ -80,15 +92,15 @@ export default function Home() {
       </section>
 
       {/* Locations */}
-      <section style={{ background: '#f3f6f3', padding: '60px 20px' }}>
+      <section style={{ background: 'var(--sand-light)', padding: '60px 20px' }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <h2 style={{ textAlign: 'center', color: '#1a472a', fontSize: '26px', fontWeight: '800', marginBottom: '36px' }}>
             {g('home_locations_title')}
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '20px' }}>
             {locations.map((l, i) => (
-              <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '28px 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #eee' }}>
-                <div style={{ fontSize: '32px', marginBottom: '10px' }}>{l.icon}</div>
+              <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '28px 24px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid var(--sand)', borderTop: '3px solid var(--sand)' }}>
+                <div style={{ marginBottom: '12px' }}><FeatureIcon value={l.icon} size={28} color="var(--sand)" /></div>
                 <h3 style={{ margin: '0 0 10px', color: '#1a472a', fontSize: '17px', fontWeight: '700' }}>{l.title}</h3>
                 <p style={{ margin: 0, color: '#555', fontSize: '14px', lineHeight: 1.7 }}>{l.text}</p>
               </div>
@@ -99,11 +111,13 @@ export default function Home() {
 
       {/* CTA */}
       <section style={{ textAlign: 'center', padding: '60px 20px' }}>
-        <h2 style={{ color: '#1a472a', fontSize: gs('home_cta_title_size') + 'px', fontWeight: '800', marginBottom: '12px' }}>{g('home_cta_title')}</h2>
-        <p style={{ color: '#666', marginBottom: '28px', fontSize: '15px' }}>{g('home_cta_subtitle')}</p>
-        <Link to="/activities" style={{ background: '#1a472a', color: 'white', padding: '14px 40px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 16px rgba(26,71,42,0.25)' }}>
-          {g('home_cta_button')}
-        </Link>
+        <div style={{ maxWidth: '560px', margin: '0 auto', background: 'var(--sand-light)', border: '1px solid var(--sand)', borderRadius: '20px', padding: '40px 30px' }}>
+          <h2 style={{ color: '#1a472a', fontSize: gs('home_cta_title_size') + 'px', fontWeight: '800', marginBottom: '12px' }}>{g('home_cta_title')}</h2>
+          <p style={{ color: '#666', marginBottom: '28px', fontSize: '15px' }}>{g('home_cta_subtitle')}</p>
+          <Link to="/activities" style={{ background: '#1a472a', color: 'white', padding: '14px 40px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 16px rgba(26,71,42,0.25)' }}>
+            {g('home_cta_button')}
+          </Link>
+        </div>
       </section>
     </main>
   )

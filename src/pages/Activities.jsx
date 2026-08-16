@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import SectionCurve from '../components/SectionCurve'
+import Icon from '../components/Icon'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -111,16 +112,16 @@ export default function Activities() {
                 }}>
                   {a.image_url
                     ? <img src={a.image_url} alt={a.name} style={{ width: '100%', height: '150px', objectFit: 'cover' }} />
-                    : <div style={{ width: '100%', height: '80px', background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '36px' }}>🎾</div>
+                    : <div style={{ width: '100%', height: '80px', background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ball" size={30} color="rgba(255,255,255,0.9)" /></div>
                   }
                   <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ fontWeight: '800', fontSize: '16px', color: '#1a472a' }}>{a.name}</div>
                     {a.description && <p style={{ margin: 0, fontSize: '13px', color: '#666', lineHeight: 1.6 }}>{a.description}</p>}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '13px', color: '#555', marginTop: '4px' }}>
-                      <span>📅 יום {DAYS_HE[a.day_of_week] || a.day_of_week}</span>
-                      {a.time && <span>🕐 {a.time}</span>}
-                      {a.price && <span>💰 ₪{a.price} לחודש</span>}
-                      {a.max_students && <span>👥 עד {a.max_students} תלמידים</span>}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '13px', color: '#555', marginTop: '4px' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />יום {DAYS_HE[a.day_of_week] || a.day_of_week}</span>
+                      {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={15} color="var(--sand)" />{a.time}</span>}
+                      {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{a.price} לחודש</span>}
+                      {a.max_students && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={15} color="var(--sand)" />עד {a.max_students} תלמידים</span>}
                     </div>
                   </div>
                 </div>
@@ -134,11 +135,11 @@ export default function Activities() {
       <div style={{ textAlign: 'center', padding: '48px 20px' }}>
         <p style={{ color: '#888', fontSize: '14px', marginBottom: '16px' }}>שאלות? נשמח לעזור</p>
         <Link to="/contact" style={{
-          display: 'inline-block', background: '#1a472a', color: 'white',
+          display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#1a472a', color: 'white',
           textDecoration: 'none', borderRadius: '30px', padding: '12px 32px',
           fontWeight: '700', fontSize: '15px', boxShadow: '0 4px 14px rgba(26,71,42,0.2)',
         }}>
-          📬 יצירת קשר
+          <Icon name="mail" size={16} />יצירת קשר
         </Link>
       </div>
     </main>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import Icon from '../components/Icon'
 
 const DAYS_HE = {
   sunday: 'ראשון',
@@ -145,9 +146,9 @@ export default function Register() {
                 <div style={{ fontWeight: '800', fontSize: '17px', color: '#1a472a' }}>{a.name}</div>
                 {a.description && <div style={{ fontSize: '13px', color: '#666' }}>{a.description}</div>}
                 <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#555', flexWrap: 'wrap', marginTop: '2px' }}>
-                  <span>📅 יום {DAYS_HE[a.day_of_week]}</span>
-                  {a.time && <span>🕐 {a.time}</span>}
-                  {a.price && <span>💰 ₪{a.price} לחודש</span>}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="calendar" size={14} color="var(--sand)" />יום {DAYS_HE[a.day_of_week]}</span>
+                  {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="clock" size={14} color="var(--sand)" />{a.time}</span>}
+                  {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="tag" size={14} color="var(--sand)" />₪{a.price} לחודש</span>}
                 </div>
               </button>
             ))}
@@ -170,7 +171,7 @@ export default function Register() {
     return (
       <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
         <div style={{ background: '#fff', borderRadius: '12px', padding: '40px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+          <div style={{ marginBottom: '16px' }}><Icon name="check" size={44} color="#1a472a" /></div>
           <h2 style={{ color: '#1a472a', marginBottom: '8px' }}>ההרשמה בוצעה בהצלחה!</h2>
           <p style={{ color: '#555', marginBottom: '24px' }}>נרשמת לחוג <strong>{activity.name}</strong></p>
           <button
@@ -194,8 +195,8 @@ export default function Register() {
       {/* פרטי החוג */}
       <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
         <h3 style={{ margin: '0 0 8px', color: '#1a472a' }}>{activity.name}</h3>
-        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333' }}>📅 יום {DAYS_HE[activity.day_of_week] || activity.day_of_week} בשעה {activity.time}</p>
-        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333' }}>💰 ₪{activity.price} לחודש</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />יום {DAYS_HE[activity.day_of_week] || activity.day_of_week} בשעה {activity.time}</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{activity.price} לחודש</p>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

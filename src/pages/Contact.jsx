@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 const inputStyle = {
   width: '100%', padding: '12px 14px', borderRadius: '10px',
@@ -53,7 +54,7 @@ export default function Contact() {
         method: 'POST',
         body: `${form.name} | ${form.phone || form.email}`,
         headers: {
-          'Title': 'פנייה חדשה - אילן טניס 🎾',
+          'Title': 'פנייה חדשה - אילן טניס',
           'Priority': 'high',
           'Tags': 'tennis',
         },
@@ -76,7 +77,7 @@ export default function Contact() {
       <div style={{ maxWidth: '520px', margin: '40px auto', padding: '0 20px 60px' }}>
         {sent ? (
           <div style={{ background: '#fff', borderRadius: '18px', padding: '48px', textAlign: 'center', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
-            <div style={{ fontSize: '56px', marginBottom: '16px' }}>✅</div>
+            <div style={{ marginBottom: '16px' }}><Icon name="check" size={48} color="#1a472a" /></div>
             <h2 style={{ color: '#1a472a', marginBottom: '10px' }}>הפנייה נשלחה!</h2>
             <p style={{ color: '#666', lineHeight: 1.6 }}>תודה, {form.name}! נחזור אליך בהקדם.</p>
           </div>
@@ -126,7 +127,7 @@ export default function Contact() {
 
             <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #eee', display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <a href="mailto:ilantennisacademy@gmail.com" style={{ color: '#555', fontSize: '14px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                📧 ilantennisacademy@gmail.com
+                <Icon name="mail" size={16} color="#888" />ilantennisacademy@gmail.com
               </a>
             </div>
           </div>

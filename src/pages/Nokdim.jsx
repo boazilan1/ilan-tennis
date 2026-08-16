@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import SectionCurve from '../components/SectionCurve'
+import Icon from '../components/Icon'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -70,11 +71,11 @@ export default function Nokdim() {
 
       {/* Intro */}
       <section style={{ maxWidth: '760px', margin: '0 auto', padding: '56px 20px 20px' }}>
-        <div style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #eee' }}>
+        <div style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
           <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('nokdim_intro_title')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {g('nokdim_intro_text').split('\n').filter(Boolean).map((p, i) => (
-              <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8, paddingRight: '14px', borderRight: '3px solid #c5ddc5' }}>{p}</p>
+              <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8, paddingRight: '14px', borderRight: '3px solid var(--sand)' }}>{p}</p>
             ))}
           </div>
         </div>
@@ -91,9 +92,9 @@ export default function Nokdim() {
               <div style={{ fontWeight: '800', fontSize: '19px', color: '#1a472a' }}>{activity.name}</div>
               {activity.description && <p style={{ margin: 0, color: '#333', fontSize: '14px' }}>{activity.description}</p>}
               <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', justifyContent: 'center', fontSize: '15px', color: '#333' }}>
-                <span>📅 יום {DAYS_HE[activity.day_of_week] || activity.day_of_week}</span>
-                {activity.time && <span>🕐 {activity.time}</span>}
-                {activity.price && <span>💰 ₪{activity.price} לחודש</span>}
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />יום {DAYS_HE[activity.day_of_week] || activity.day_of_week}</span>
+                {activity.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={17} color="var(--sand)" />{activity.time}</span>}
+                {activity.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{activity.price} לחודש</span>}
               </div>
               <Link to={registerLink} style={{
                 marginTop: '6px', background: '#1a472a', color: 'white', textDecoration: 'none',
@@ -106,7 +107,7 @@ export default function Nokdim() {
               background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '18px',
               padding: '28px', textAlign: 'center', color: '#7c5a00',
             }}>
-              <div style={{ fontSize: '30px', marginBottom: '8px' }}>🕒</div>
+              <div style={{ marginBottom: '10px' }}><Icon name="clock" size={30} color="#b45309" /></div>
               <p style={{ margin: '0 0 16px', fontSize: '15px' }}>פרטי החוג בנוקדים יתפרסמו בקרוב</p>
               <Link to="/contact" style={{
                 display: 'inline-block', background: '#1a472a', color: 'white', textDecoration: 'none',

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import Icon from './Icon'
 
 export default function Header() {
   const location = useLocation()
@@ -34,7 +35,7 @@ export default function Header() {
     { to: '/tournaments', label: 'תחרויות' },
     ...dynamicPages.map(p => ({ to: `/page/${p.slug}`, label: p.title })),
     { to: '/register', label: 'הרשמה לחוג' },
-    ...(isAdmin ? [{ to: '/admin', label: '⚙️ ניהול' }] : []),
+    ...(isAdmin ? [{ to: '/admin', label: 'ניהול', icon: 'settings' }] : []),
   ]
 
   return (
@@ -49,7 +50,7 @@ export default function Header() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
         <Link to="/" style={{ textDecoration: 'none', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }} onClick={() => setMenuOpen(false)}>
-          <span style={{ fontSize: '28px' }}>🎾</span>
+          <Icon name="ball" size={26} />
           <span style={{ fontWeight: 'bold', fontSize: '20px' }}>{logoText}</span>
         </Link>
 
@@ -64,7 +65,8 @@ export default function Header() {
               fontWeight: location.pathname === link.to ? 'bold' : 'normal',
               background: location.pathname === link.to ? 'rgba(255,255,255,0.2)' : 'transparent',
               fontSize: '15px',
-            }}>{link.label}</Link>
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+            }}>{link.icon && <Icon name={link.icon} size={16} />}{link.label}</Link>
           ))}
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '8px', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '16px' }}>
@@ -86,7 +88,7 @@ export default function Header() {
           style={{ display: 'none', background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '8px', fontSize: '24px' }}
           aria-label="תפריט"
         >
-          {menuOpen ? '✕' : '☰'}
+          <Icon name={menuOpen ? 'close' : 'menu'} size={24} />
         </button>
       </div>
 
@@ -103,7 +105,8 @@ export default function Header() {
               background: location.pathname === link.to ? 'rgba(255,255,255,0.15)' : 'transparent',
               fontSize: '16px',
               borderBottom: '1px solid rgba(255,255,255,0.1)',
-            }}>{link.label}</Link>
+              display: 'flex', alignItems: 'center', gap: '8px',
+            }}>{link.icon && <Icon name={link.icon} size={17} />}{link.label}</Link>
           ))}
           {user ? (
             <>

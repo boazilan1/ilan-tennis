@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from './Icon'
 
 export default function Footer() {
   const [title, setTitle] = useState('אילן טניס')
@@ -25,7 +26,9 @@ export default function Footer() {
       textAlign: 'center', padding: '28px 24px', direction: 'rtl',
       fontSize: '14px', marginTop: 'auto',
     }}>
-      <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: 'white', fontSize: '16px' }}>🎾 {title}</p>
+      <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: 'white', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+        <Icon name="ball" size={18} />{title}
+      </p>
       {subtitle && <p style={{ margin: '0 0 12px', opacity: 0.75, fontSize: '13px' }}>{subtitle}</p>}
 
       {items.length > 0 && (

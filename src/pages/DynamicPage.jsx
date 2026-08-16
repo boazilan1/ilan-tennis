@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 export default function DynamicPage() {
   const { slug } = useParams()
@@ -44,7 +45,7 @@ export default function DynamicPage() {
   if (notFound) {
     return (
       <main style={{ direction: 'rtl', flex: 1, textAlign: 'center', padding: '80px 20px' }}>
-        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎾</div>
+        <div style={{ marginBottom: '16px' }}><Icon name="ball" size={40} color="#1a472a" /></div>
         <h1 style={{ color: '#1a472a', marginBottom: '8px' }}>הדף לא נמצא</h1>
         <Link to="/" style={{ color: '#1a472a', fontWeight: '700' }}>חזרה לעמוד הבית</Link>
       </main>
@@ -95,7 +96,7 @@ export default function DynamicPage() {
 
         {sections.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#aaa' }}>
-            <div style={{ fontSize: '36px', marginBottom: '12px' }}>🎾</div>
+            <div style={{ marginBottom: '12px' }}><Icon name="ball" size={30} color="#ccc" /></div>
             <p>תוכן הדף יהיה זמין בקרוב</p>
           </div>
         )}
@@ -104,11 +105,11 @@ export default function DynamicPage() {
       {/* Footer CTA */}
       <div style={{ textAlign: 'center', padding: '40px 20px', borderTop: '1px solid #e8ece8' }}>
         <Link to="/contact" style={{
-          display: 'inline-block', background: '#1a472a', color: 'white',
+          display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#1a472a', color: 'white',
           textDecoration: 'none', borderRadius: '30px', padding: '12px 32px',
           fontWeight: '700', fontSize: '15px', boxShadow: '0 4px 14px rgba(26,71,42,0.2)',
         }}>
-          📬 יצירת קשר
+          <Icon name="mail" size={16} />יצירת קשר
         </Link>
       </div>
     </main>

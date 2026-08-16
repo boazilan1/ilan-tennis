@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import Icon from '../components/Icon'
 
 const STATUS_T = {
   draft:     { label: 'טיוטה',      color: '#9ca3af' },
   groups:    { label: 'שלב בתים',   color: '#d97706' },
   knockout:  { label: 'נוק-אאוט',   color: '#7c3aed' },
-  completed: { label: 'הסתיים 🏆',  color: '#16a34a' },
+  completed: { label: 'הסתיים',     color: '#16a34a' },
 }
 const ROUND_NAMES = { 1: 'גמר', 2: 'חצי גמר', 4: 'רבע גמר', 8: 'שמינית גמר', 16: 'שישה עשר', 32: 'שלושים ושניים' }
 const GROUP_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -70,7 +71,7 @@ function MatchCard({ m, pName, isFinal }) {
         <span style={{ fontSize: 12, fontWeight: isP1Win ? '700' : '400', color: isP1Win ? '#16a34a' : m.player1_id ? '#111' : '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
           {m.player1_id ? pName(m.player1_id) : (isBye ? '—' : 'ממתין...')}
         </span>
-        {isP1Win && <span style={{ fontSize: 12, flexShrink: 0 }}>🏆</span>}
+        {isP1Win && <Icon name="trophy" size={13} color="#16a34a" style={{ flexShrink: 0 }} />}
       </div>
       {/* Player 2 */}
       <div style={{
@@ -80,7 +81,7 @@ function MatchCard({ m, pName, isFinal }) {
         <span style={{ fontSize: 12, fontWeight: isP2Win ? '700' : '400', color: isP2Win ? '#16a34a' : m.player2_id ? '#111' : '#ccc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
           {m.player2_id ? pName(m.player2_id) : (isBye ? 'BYE' : 'ממתין...')}
         </span>
-        {isP2Win && <span style={{ fontSize: 12, flexShrink: 0 }}>🏆</span>}
+        {isP2Win && <Icon name="trophy" size={13} color="#16a34a" style={{ flexShrink: 0 }} />}
       </div>
       {/* Footer: score / schedule / location */}
       {(m.score || hasInfo || isBye || isPending) && (
@@ -88,12 +89,12 @@ function MatchCard({ m, pName, isFinal }) {
           {m.score && <div style={{ fontSize: 11, color: '#555', fontWeight: '600' }}>{m.score}</div>}
           {isBye && <div style={{ fontSize: 10, color: '#d97706' }}>עבר אוטומטית</div>}
           {!m.score && !isBye && isPending && m.scheduled_at && (
-            <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: '600' }}>📅 {formatMatchTime(m.scheduled_at)}</div>
+            <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><Icon name="calendar" size={11} />{formatMatchTime(m.scheduled_at)}</div>
           )}
           {!m.score && !isBye && isPending && !m.scheduled_at && (
             <div style={{ fontSize: 10, color: '#ccc' }}>טרם שוחק</div>
           )}
-          {m.location && <div style={{ fontSize: 10, color: '#888', marginTop: 1 }}>📍 {m.location}</div>}
+          {m.location && <div style={{ fontSize: 10, color: '#888', marginTop: 1, display: 'flex', alignItems: 'center', gap: '4px' }}><Icon name="pin" size={11} />{m.location}</div>}
         </div>
       )}
     </div>
@@ -239,7 +240,7 @@ export default function Tournaments() {
             {/* Champion banner */}
             {t.status === 'completed' && champion && (
               <div style={{ background: 'linear-gradient(135deg, #0f2d1a, #1a472a, #2d6a4f)', borderRadius: 16, padding: 28, textAlign: 'center', marginBottom: 32, color: '#fff', boxShadow: '0 8px 28px rgba(26,71,42,0.3)' }}>
-                <div style={{ fontSize: 44, marginBottom: 8 }}>🏆</div>
+                <div style={{ marginBottom: 8 }}><Icon name="trophy" size={38} color="#fff" /></div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: '700', letterSpacing: 3, marginBottom: 6 }}>אלוף/ת</div>
                 <div style={{ fontSize: 32, fontWeight: '800' }}>{pName(champion)}</div>
               </div>
@@ -292,7 +293,7 @@ export default function Tournaments() {
                               {m.score
                                 ? <span style={{ color: '#555', fontWeight: '600' }}>{m.score}</span>
                                 : m.scheduled_at
-                                  ? <span style={{ color: '#7c3aed', fontSize: 11 }}>📅 {formatMatchTime(m.scheduled_at)}</span>
+                                  ? <span style={{ color: '#7c3aed', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Icon name="calendar" size={11} />{formatMatchTime(m.scheduled_at)}</span>
                                   : <span style={{ color: '#ccc', fontSize: 11 }}>טרם שוחק</span>
                               }
                             </div>
@@ -324,13 +325,13 @@ export default function Tournaments() {
   return (
     <main style={{ maxWidth: 900, margin: '40px auto', padding: '0 20px' }} dir="rtl">
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: '800', color: '#111' }}>תחרויות 🎾</h1>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: '800', color: '#111', display: 'flex', alignItems: 'center', gap: '10px' }}>תחרויות<Icon name="trophy" size={24} color="#1a472a" /></h1>
         <p style={{ margin: '6px 0 0', color: '#888', fontSize: 15 }}>תוצאות ולוחות תחרויות</p>
       </div>
 
       {tournaments.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 80 }}>
-          <div style={{ fontSize: 52, marginBottom: 16 }}>🎾</div>
+          <div style={{ marginBottom: 16 }}><Icon name="ball" size={42} color="#ddd" /></div>
           <div style={{ fontSize: 18, fontWeight: '700', color: '#333', marginBottom: 8 }}>אין תחרויות פעילות כרגע</div>
           <div style={{ color: '#aaa', fontSize: 14 }}>התחרויות יופיעו כאן כשיתחילו</div>
         </div>
@@ -344,7 +345,7 @@ export default function Tournaments() {
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.1)'}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.06)'}
               >
-                <div style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}>🎾</div>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon name="trophy" size={22} color="#fff" /></div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: '700', fontSize: 17, color: '#111' }}>{t.name}</div>
                   {t.description && <div style={{ fontSize: 13, color: '#888', marginTop: 2 }}>{t.description}</div>}
