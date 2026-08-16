@@ -171,7 +171,7 @@ export default function Tournaments() {
     setLoading(true)
     const [tRes, pRes] = await Promise.all([
       supabase.from('tournaments').select('*').order('created_at', { ascending: false }),
-      supabase.from('players').select('id, name').order('name'),
+      supabase.from('public_player_names').select('id, name').order('name'),
     ])
     if (tRes.data) setTournaments(tRes.data.filter(t => t.status !== 'draft'))
     if (pRes.data) setAllPlayers(pRes.data)
