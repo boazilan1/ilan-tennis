@@ -33,6 +33,7 @@ function FeatureIcon({ value, size, color }) {
 
 export default function Home() {
   const [s, setS] = useState(DEFAULTS)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   useEffect(() => {
     supabase.from('site_settings').select('key, value').then(({ data }) => {
@@ -81,22 +82,6 @@ export default function Home() {
         <SectionCurve fill="#f5f5f5" />
       </section>
 
-      {/* About */}
-      {g('home_about_text') && (
-        <section style={{ maxWidth: '700px', margin: '56px auto 0', padding: '0 20px' }}>
-          <div style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
-            {g('home_about_title') && (
-              <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('home_about_title')}</h2>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {g('home_about_text').split('\n').filter(Boolean).map((p, i) => (
-                <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8 }}>{p}</p>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
       {/* Feature cards */}
       <section style={{ maxWidth: '960px', margin: '60px auto', padding: '0 20px' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
@@ -131,6 +116,32 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* About */}
+      {g('home_about_text') && (() => {
+        const paragraphs = g('home_about_text').split('\n').filter(Boolean)
+        return (
+          <section style={{ maxWidth: '700px', margin: '60px auto 0', padding: '0 20px' }}>
+            <div
+              onClick={() => setAboutOpen(o => !o)}
+              style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)', cursor: 'pointer' }}
+            >
+              {g('home_about_title') && (
+                <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('home_about_title')}</h2>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {(aboutOpen ? paragraphs : paragraphs.slice(0, 1)).map((p, i) => (
+                  <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8 }}>{p}</p>
+                ))}
+              </div>
+              <div style={{ marginTop: '16px', color: '#1a472a', fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {aboutOpen ? 'הצג פחות' : 'קרא עוד'}
+                <span style={{ display: 'inline-block', transition: 'transform 0.15s', transform: aboutOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+              </div>
+            </div>
+          </section>
+        )
+      })()}
 
       {/* CTA */}
       <section style={{ textAlign: 'center', padding: '60px 20px' }}>

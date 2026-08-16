@@ -16,7 +16,7 @@ function formatDays(a) {
 
 const DEFAULTS = {
   nokdim_hero_title: 'נוקדים', nokdim_hero_title_size: '36',
-  nokdim_hero_subtitle: 'מיקום חדש שלנו — שני מגרשי טניס, וחוג חדש שיוצא לדרך בקרוב',
+  nokdim_hero_subtitle: 'מיקום חדש שלנו — שני מגרשי טניס, ופעילות חדשה שיוצאת לדרך בקרוב',
   nokdim_hero_cta: 'הרשמה לחוג',
   nokdim_intro_title: '',
   nokdim_intro_text: 'אנחנו שמחים לפתוח פעילות חדשה בנוקדים!\nשני מגרשי טניס חדשים, באווירה מקצועית וקהילתית.\nהחוג מתאים לכל הגילאים והרמות — ממתחילים ועד מתקדמים.',
