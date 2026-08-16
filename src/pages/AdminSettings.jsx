@@ -22,7 +22,7 @@ const ALL_KEYS = [
   'activities_hero_title','activities_hero_title_size','activities_hero_subtitle','activities_hero_subtitle_size',
   'contact_hero_title','contact_hero_title_size','contact_hero_subtitle','contact_hero_subtitle_size',
   'notify_ntfy_topic','notify_email',
-  'header_logo_text','footer_title','footer_subtitle','footer_email',
+  'header_logo_text','header_logo_url','footer_title','footer_subtitle','footer_email',
   'nokdim_hero_title','nokdim_hero_title_size','nokdim_hero_subtitle','nokdim_hero_cta',
   'nokdim_intro_title','nokdim_intro_text','nokdim_image_url','nokdim_image_pos_x','nokdim_image_pos_y',
   'register_terms_text',
@@ -391,6 +391,10 @@ export default function AdminSettings() {
         {tab === 'layout' && <>
           <Card title="הדר (Header) — שם האתר בסרגל הניווט">
             <Field label="שם האתר" value={g('header_logo_text')} onChange={v => set('header_logo_text', v)} />
+          </Card>
+          <Card title="לוגו">
+            <ImageUpload value={g('header_logo_url')} onChange={v => set('header_logo_url', v)} folder="logo" />
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '8px' }}>מוצג עגול לצד שם האתר בהדר ובפוטר. ריק = כדור טניס כברירת מחדל.</div>
           </Card>
           <Card title="פוטר (Footer) — כותרת ותיאור">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

@@ -11,14 +11,18 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dynamicPages, setDynamicPages] = useState([])
   const [logoText, setLogoText] = useState('אילן טניס')
+  const [logoUrl, setLogoUrl] = useState('')
 
   useEffect(() => {
     Promise.all([
       supabase.from('pages').select('title, slug').order('sort_order'),
-      supabase.from('site_settings').select('value').eq('key', 'header_logo_text').single(),
+      supabase.from('site_settings').select('key, value').in('key', ['header_logo_text', 'header_logo_url']),
     ]).then(([pagesRes, logoRes]) => {
       if (pagesRes.data) setDynamicPages(pagesRes.data)
-      if (logoRes.data?.value) setLogoText(logoRes.data.value)
+      logoRes.data?.forEach(r => {
+        if (r.key === 'header_logo_text' && r.value) setLogoText(r.value)
+        if (r.key === 'header_logo_url') setLogoUrl(r.value || '')
+      })
     })
   }, [])
 
@@ -50,7 +54,7 @@ export default function Header() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
         <Link to="/" style={{ textDecoration: 'none', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }} onClick={() => setMenuOpen(false)}>
-          <Icon name="ball" size={26} />
+          {logoUrl ? <img src={logoUrl} alt="" style={{ height: '32px', width: '32px', objectFit: 'contain', borderRadius: '50%' }} /> : <Icon name="ball" size={26} />}
           <span style={{ fontWeight: 'bold', fontSize: '20px' }}>{logoText}</span>
         </Link>
 

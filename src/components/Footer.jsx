@@ -6,15 +6,17 @@ export default function Footer() {
   const [title, setTitle] = useState('אילן טניס')
   const [subtitle, setSubtitle] = useState('')
   const [items, setItems] = useState([])
+  const [logoUrl, setLogoUrl] = useState('')
 
   useEffect(() => {
     Promise.all([
-      supabase.from('site_settings').select('key, value').in('key', ['footer_title', 'footer_subtitle']),
+      supabase.from('site_settings').select('key, value').in('key', ['footer_title', 'footer_subtitle', 'header_logo_url']),
       supabase.from('footer_items').select('*').order('sort_order'),
     ]).then(([setRes, itemsRes]) => {
       setRes.data?.forEach(r => {
         if (r.key === 'footer_title' && r.value) setTitle(r.value)
         if (r.key === 'footer_subtitle') setSubtitle(r.value || '')
+        if (r.key === 'header_logo_url') setLogoUrl(r.value || '')
       })
       if (itemsRes.data) setItems(itemsRes.data)
     })
@@ -27,7 +29,7 @@ export default function Footer() {
       fontSize: '14px', marginTop: 'auto',
     }}>
       <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: 'white', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-        <Icon name="ball" size={18} />{title}
+        {logoUrl ? <img src={logoUrl} alt="" style={{ height: '20px', width: '20px', objectFit: 'contain', borderRadius: '50%' }} /> : <Icon name="ball" size={18} />}{title}
       </p>
       {subtitle && <p style={{ margin: '0 0 12px', opacity: 0.75, fontSize: '13px' }}>{subtitle}</p>}
 
