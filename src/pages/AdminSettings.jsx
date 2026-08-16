@@ -7,7 +7,8 @@ const lbl = { display: 'block', fontSize: '11px', fontWeight: '700', color: '#66
 
 const ALL_KEYS = [
   'home_hero_title','home_hero_title_size','home_hero_subtitle','home_hero_subtitle_size',
-  'home_hero_cta1','home_hero_cta2','home_hero_image_url','home_hero_image_pos_x','home_hero_image_pos_y',
+  'home_hero_cta1','home_hero_cta2','home_hero_image_url','home_hero_image_pos_x','home_hero_image_pos_y','home_hero_height',
+  'home_about_title','home_about_text',
   'home_cta_title','home_cta_title_size','home_cta_subtitle','home_cta_button',
   'home_locations_title',
   'home_f1_icon','home_f1_title','home_f1_text',
@@ -45,12 +46,33 @@ function SizeInput({ value, onChange }) {
   )
 }
 
-function Field({ label, value, onChange, size, textarea, emoji }) {
+function HeightInput({ value, onChange }) {
+  const presets = [{ l: 'נמוך', v: 320 }, { l: 'בינוני', v: 420 }, { l: 'גבוה', v: 540 }, { l: 'מסך מלא', v: 680 }]
+  const num = Number(value) || 420
+  return (
+    <div style={{ marginBottom: '12px' }}>
+      <label style={lbl}>גובה אזור ההירו</label>
+      <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {presets.map(p => (
+          <button key={p.v} type="button" onClick={() => onChange(String(p.v))} style={{
+            background: num === p.v ? '#1a472a' : '#f0f0f0', color: num === p.v ? '#fff' : '#555',
+            border: 'none', borderRadius: '5px', padding: '4px 10px', cursor: 'pointer', fontSize: '11px', fontWeight: '700',
+          }}>{p.l}</button>
+        ))}
+        <input type="number" min="200" max="900" step="10" value={value} onChange={e => onChange(e.target.value)}
+          style={{ width: '60px', padding: '4px 6px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '12px' }} />
+        <span style={{ fontSize: '11px', color: '#aaa' }}>px</span>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, size, textarea, rows, emoji }) {
   return (
     <div style={{ marginBottom: '12px' }}>
       <label style={lbl}>{label}</label>
       {textarea
-        ? <textarea value={value} onChange={e => onChange(e.target.value)} rows={2} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
+        ? <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows || 2} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
         : <input value={value} onChange={e => onChange(e.target.value)} style={emoji ? { ...inp, fontSize: '22px', width: '70px' } : inp} />
       }
       {size !== undefined && (
@@ -275,7 +297,16 @@ export default function AdminSettings() {
               y={Number(g('home_hero_image_pos_y')) || 50}
               onChange={(x, y) => { set('home_hero_image_pos_x', String(x)); set('home_hero_image_pos_y', String(y)) }}
             />
-            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '8px' }}>ריק = הרקע הירוק הרגיל עם כדור הטניס</div>
+            <div style={{ marginTop: '12px' }}>
+              <HeightInput value={g('home_hero_height') || '420'} onChange={v => set('home_hero_height', v)} />
+            </div>
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = הרקע הירוק הרגיל עם כדור הטניס</div>
+          </Card>
+
+          <Card title="קצת עלינו (טקסט חופשי)">
+            <Field label="כותרת" value={g('home_about_title')} onChange={v => set('home_about_title', v)} />
+            <Field label="טקסט (כל שורה = פסקה)" value={g('home_about_text')} onChange={v => set('home_about_text', v)} textarea rows={6} />
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = הסקשן לא יוצג בעמוד</div>
           </Card>
 
           <Card title="כרטיסי יתרונות (4 כרטיסים)">

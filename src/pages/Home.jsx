@@ -20,7 +20,8 @@ const DEFAULTS = {
   home_l2_icon: 'pin', home_l2_title: 'גבעת זאב', home_l2_text: 'פעילות טניס לתושבי האזור — קבוצות לילדים ולנוער, מתחילים ומתקדמים',
   home_l3_icon: 'school', home_l3_title: 'בתי ספר בירושלים', home_l3_text: 'תוכניות ניידות עם ציוד מותאם — רשתות, כדורים ומחבטים',
   home_l4_icon: 'tent', home_l4_title: 'מחנות ותחרויות', home_l4_text: 'מחנות אימון עצימים ותחרויות לשחקנים בכל הרמות',
-  home_hero_image_url: '', home_hero_image_pos_x: '50', home_hero_image_pos_y: '50',
+  home_hero_image_url: '', home_hero_image_pos_x: '50', home_hero_image_pos_y: '50', home_hero_height: '420',
+  home_about_title: 'קצת עלינו', home_about_text: '',
 }
 
 const ICON_NAMES = new Set(['ball', 'trophy', 'users', 'pin', 'cap', 'school', 'tent', 'calendar', 'clock', 'tag', 'mail', 'check'])
@@ -56,8 +57,9 @@ export default function Home() {
         background: g('home_hero_image_url')
           ? `linear-gradient(180deg, rgba(15,45,26,0.55) 0%, rgba(15,45,26,0.72) 100%), url(${g('home_hero_image_url')}) ${gs('home_hero_image_pos_x')}% ${gs('home_hero_image_pos_y')}% / cover no-repeat`
           : 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
-        color: 'white', textAlign: 'center', padding: '80px 24px 70px',
-        position: 'relative',
+        color: 'white', textAlign: 'center', padding: '24px', position: 'relative',
+        minHeight: gs('home_hero_height') + 'px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       }}>
         {!g('home_hero_image_url') && (
           <div style={{ marginBottom: '16px' }}><Icon name="ball" size={52} color="rgba(255,255,255,0.9)" /></div>
@@ -78,6 +80,22 @@ export default function Home() {
         </div>
         <SectionCurve fill="#f5f5f5" />
       </section>
+
+      {/* About */}
+      {g('home_about_text') && (
+        <section style={{ maxWidth: '700px', margin: '56px auto 0', padding: '0 20px' }}>
+          <div style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
+            {g('home_about_title') && (
+              <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('home_about_title')}</h2>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {g('home_about_text').split('\n').filter(Boolean).map((p, i) => (
+                <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8 }}>{p}</p>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Feature cards */}
       <section style={{ maxWidth: '960px', margin: '60px auto', padding: '0 20px' }}>
