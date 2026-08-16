@@ -7,7 +7,7 @@ const lbl = { display: 'block', fontSize: '11px', fontWeight: '700', color: '#66
 
 const ALL_KEYS = [
   'home_hero_title','home_hero_title_size','home_hero_subtitle','home_hero_subtitle_size',
-  'home_hero_cta1','home_hero_cta2',
+  'home_hero_cta1','home_hero_cta2','home_hero_image_url','home_hero_image_pos_x','home_hero_image_pos_y',
   'home_cta_title','home_cta_title_size','home_cta_subtitle','home_cta_button',
   'home_locations_title',
   'home_f1_icon','home_f1_title','home_f1_text',
@@ -265,6 +265,17 @@ export default function AdminSettings() {
               <Field label="כפתור ראשי" value={g('home_hero_cta1')} onChange={v => set('home_hero_cta1', v)} />
               <Field label="כפתור משני" value={g('home_hero_cta2')} onChange={v => set('home_hero_cta2', v)} />
             </div>
+          </Card>
+
+          <Card title="תמונת רקע להירו">
+            <ImageUpload value={g('home_hero_image_url')} onChange={v => set('home_hero_image_url', v)} folder="home" />
+            <ImagePositionPicker
+              imageUrl={g('home_hero_image_url')}
+              x={Number(g('home_hero_image_pos_x')) || 50}
+              y={Number(g('home_hero_image_pos_y')) || 50}
+              onChange={(x, y) => { set('home_hero_image_pos_x', String(x)); set('home_hero_image_pos_y', String(y)) }}
+            />
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '8px' }}>ריק = הרקע הירוק הרגיל עם כדור הטניס</div>
           </Card>
 
           <Card title="כרטיסי יתרונות (4 כרטיסים)">

@@ -20,6 +20,7 @@ const DEFAULTS = {
   home_l2_icon: 'pin', home_l2_title: 'גבעת זאב', home_l2_text: 'פעילות טניס לתושבי האזור — קבוצות לילדים ולנוער, מתחילים ומתקדמים',
   home_l3_icon: 'school', home_l3_title: 'בתי ספר בירושלים', home_l3_text: 'תוכניות ניידות עם ציוד מותאם — רשתות, כדורים ומחבטים',
   home_l4_icon: 'tent', home_l4_title: 'מחנות ותחרויות', home_l4_text: 'מחנות אימון עצימים ותחרויות לשחקנים בכל הרמות',
+  home_hero_image_url: '', home_hero_image_pos_x: '50', home_hero_image_pos_y: '50',
 }
 
 const ICON_NAMES = new Set(['ball', 'trophy', 'users', 'pin', 'cap', 'school', 'tent', 'calendar', 'clock', 'tag', 'mail', 'check'])
@@ -52,11 +53,15 @@ export default function Home() {
     <main style={{ direction: 'rtl', flex: 1 }}>
       {/* Hero */}
       <section style={{
-        background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
+        background: g('home_hero_image_url')
+          ? `linear-gradient(180deg, rgba(15,45,26,0.55) 0%, rgba(15,45,26,0.72) 100%), url(${g('home_hero_image_url')}) ${gs('home_hero_image_pos_x')}% ${gs('home_hero_image_pos_y')}% / cover no-repeat`
+          : 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
         color: 'white', textAlign: 'center', padding: '80px 24px 70px',
         position: 'relative',
       }}>
-        <div style={{ marginBottom: '16px' }}><Icon name="ball" size={52} color="rgba(255,255,255,0.9)" /></div>
+        {!g('home_hero_image_url') && (
+          <div style={{ marginBottom: '16px' }}><Icon name="ball" size={52} color="rgba(255,255,255,0.9)" /></div>
+        )}
         <h1 style={{ fontSize: gs('home_hero_title_size') + 'px', fontWeight: '800', margin: '0 0 14px', letterSpacing: '-0.5px' }}>
           {g('home_hero_title')}
         </h1>
