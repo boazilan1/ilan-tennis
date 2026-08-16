@@ -25,7 +25,7 @@ const DEFAULTS = {
 
 export default function Nokdim() {
   const [s, setS] = useState(DEFAULTS)
-  const [activity, setActivity] = useState(null)
+  const [slots, setSlots] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,11 +39,10 @@ export default function Nokdim() {
         settingsRes.data.forEach(r => { if (r.value) map[r.key] = r.value })
         setS(prev => ({ ...prev, ...map }))
       }
-      const activityQuery = locationRes.data
-        ? supabase.from('activities').select('*').eq('location_id', locationRes.data.id).limit(1).maybeSingle()
-        : supabase.from('activities').select('*').ilike('name', '%נוקדים%').limit(1).maybeSingle()
-      const { data: activityData } = await activityQuery
-      if (activityData) setActivity(activityData)
+      if (locationRes.data) {
+        const { data: activitiesData } = await supabase.from('activities').select('*').eq('location_id', locationRes.data.id).order('time')
+        if (activitiesData) setSlots(activitiesData)
+      }
       setLoading(false)
     }
     load()
@@ -52,7 +51,7 @@ export default function Nokdim() {
   const g = k => s[k] || DEFAULTS[k] || ''
   const gs = k => Number(g(k)) || Number(DEFAULTS[k]) || 14
 
-  const registerLink = activity ? `/register?activity=${activity.id}` : '/register'
+  const registerLink = '/register'
 
   return (
     <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3' }}>
@@ -95,20 +94,26 @@ export default function Nokdim() {
       {/* Schedule */}
       {!loading && (
         <section style={{ maxWidth: '760px', margin: '0 auto', padding: '20px 20px 56px' }}>
-          {activity ? (
+          {slots.length > 0 ? (
             <div style={{
               background: '#e8f5e9', border: '1px solid #c5ddc5', borderRadius: '18px',
-              padding: '28px', display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', textAlign: 'center',
+              padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px', alignItems: 'center', textAlign: 'center',
             }}>
-              <div style={{ fontWeight: '800', fontSize: '19px', color: '#1a472a' }}>{activity.name}</div>
-              {activity.description && <p style={{ margin: 0, color: '#333', fontSize: '14px' }}>{activity.description}</p>}
-              <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', justifyContent: 'center', fontSize: '15px', color: '#333' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />{formatDays(activity)}</span>
-                {activity.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={17} color="var(--sand)" />{activity.time}</span>}
-                {activity.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{activity.price} לחודש</span>}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                {slots.map(slot => (
+                  <div key={slot.id} style={{
+                    display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center',
+                    fontSize: '15px', color: '#333', background: 'white', borderRadius: '12px', padding: '14px 18px',
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />{formatDays(slot)}</span>
+                    {slot.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={17} color="var(--sand)" />{slot.time}</span>}
+                    {slot.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={17} color="var(--sand)" />{slot.age_group}</span>}
+                    {slot.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{slot.price} לחודש</span>}
+                  </div>
+                ))}
               </div>
               <Link to={registerLink} style={{
-                marginTop: '6px', background: '#1a472a', color: 'white', textDecoration: 'none',
+                background: '#1a472a', color: 'white', textDecoration: 'none',
                 borderRadius: '30px', padding: '12px 36px', fontWeight: '700', fontSize: '15px',
                 boxShadow: '0 4px 14px rgba(26,71,42,0.25)',
               }}>{g('nokdim_hero_cta')}</Link>
