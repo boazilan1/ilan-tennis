@@ -23,7 +23,7 @@ const ALL_KEYS = [
   'notify_ntfy_topic','notify_email',
   'header_logo_text','footer_title','footer_subtitle','footer_email',
   'nokdim_hero_title','nokdim_hero_title_size','nokdim_hero_subtitle','nokdim_hero_cta',
-  'nokdim_intro_title','nokdim_intro_text','nokdim_image_url','nokdim_image_pos_x','nokdim_image_pos_y',
+  'nokdim_intro_text','nokdim_image_url','nokdim_image_pos_x','nokdim_image_pos_y',
   'register_terms_text',
 ]
 
@@ -317,8 +317,7 @@ export default function AdminSettings() {
           </Card>
 
           <Card title="תוכן — על הפעילות בנוקדים">
-            <Field label="כותרת" value={g('nokdim_intro_title')} onChange={v => set('nokdim_intro_title', v)} />
-            <Field label="תיאור (כל שורה = פסקה)" value={g('nokdim_intro_text')} onChange={v => set('nokdim_intro_text', v)} textarea />
+            <Field label="תיאור" value={g('nokdim_intro_text')} onChange={v => set('nokdim_intro_text', v)} textarea />
           </Card>
 
           <div style={{ background: '#f0f7f0', border: '1px solid #c5ddc5', borderRadius: '10px', padding: '12px', fontSize: '12px', color: '#2d5a3d', lineHeight: 1.7 }}>
