@@ -20,7 +20,7 @@ const DEFAULTS = {
   nokdim_hero_cta: 'הרשמה לחוג',
   nokdim_intro_title: 'טניס בנוקדים',
   nokdim_intro_text: 'אנחנו שמחים לפתוח פעילות חדשה בנוקדים!\nשני מגרשי טניס חדשים, באווירה מקצועית וקהילתית.\nהחוג מתאים לכל הגילאים והרמות — ממתחילים ועד מתקדמים.',
-  nokdim_image_url: '',
+  nokdim_image_url: '', nokdim_image_pos_x: '50', nokdim_image_pos_y: '50',
 }
 
 export default function Nokdim() {
@@ -60,7 +60,7 @@ export default function Nokdim() {
         position: 'relative', color: 'white', textAlign: 'center',
         padding: '90px 24px 76px', overflow: 'hidden',
         background: g('nokdim_image_url')
-          ? `linear-gradient(180deg, rgba(15,45,26,0.55) 0%, rgba(15,45,26,0.72) 100%), url(${g('nokdim_image_url')}) center / cover no-repeat`
+          ? `linear-gradient(180deg, rgba(15,45,26,0.55) 0%, rgba(15,45,26,0.72) 100%), url(${g('nokdim_image_url')}) ${gs('nokdim_image_pos_x')}% ${gs('nokdim_image_pos_y')}% / cover no-repeat`
           : 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
       }}>
         <h1 style={{ fontSize: gs('nokdim_hero_title_size') + 'px', fontWeight: '800', margin: '0 0 14px', letterSpacing: '-0.5px' }}>

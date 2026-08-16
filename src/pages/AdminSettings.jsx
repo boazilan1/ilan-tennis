@@ -23,7 +23,7 @@ const ALL_KEYS = [
   'notify_ntfy_topic','notify_email',
   'header_logo_text','footer_title','footer_subtitle','footer_email',
   'nokdim_hero_title','nokdim_hero_title_size','nokdim_hero_subtitle','nokdim_hero_cta',
-  'nokdim_intro_title','nokdim_intro_text','nokdim_image_url',
+  'nokdim_intro_title','nokdim_intro_text','nokdim_image_url','nokdim_image_pos_x','nokdim_image_pos_y',
   'register_terms_text',
 ]
 
@@ -58,6 +58,30 @@ function Field({ label, value, onChange, size, textarea, emoji }) {
           <SizeInput value={size.value} onChange={size.onChange} />
         </div>
       )}
+    </div>
+  )
+}
+
+function ImagePositionPicker({ imageUrl, x, y, onChange }) {
+  if (!imageUrl) return null
+  function handleClick(e) {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const px = Math.round(((e.clientX - rect.left) / rect.width) * 100)
+    const py = Math.round(((e.clientY - rect.top) / rect.height) * 100)
+    onChange(Math.max(0, Math.min(100, px)), Math.max(0, Math.min(100, py)))
+  }
+  return (
+    <div style={{ marginTop: '12px' }}>
+      <div style={lbl}>מיקום התמונה — לחץ במקום שברצונך למרכז</div>
+      <div onClick={handleClick} style={{ position: 'relative', width: '100%', height: '180px', borderRadius: '10px', overflow: 'hidden', cursor: 'crosshair', border: '1px solid #e0e0e0' }}>
+        <img src={imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${x}% ${y}%`, display: 'block' }} />
+        <div style={{
+          position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%,-50%)',
+          width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #fff',
+          background: '#1a472a', boxShadow: '0 0 0 1px rgba(0,0,0,0.4)', pointerEvents: 'none',
+        }} />
+      </div>
+      <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px', textAlign: 'center' }}>X: {x}% · Y: {y}%</div>
     </div>
   )
 }
@@ -284,6 +308,12 @@ export default function AdminSettings() {
 
           <Card title="תמונת רקע להירו">
             <ImageUpload value={g('nokdim_image_url')} onChange={v => set('nokdim_image_url', v)} folder="nokdim" />
+            <ImagePositionPicker
+              imageUrl={g('nokdim_image_url')}
+              x={Number(g('nokdim_image_pos_x')) || 50}
+              y={Number(g('nokdim_image_pos_y')) || 50}
+              onChange={(x, y) => { set('nokdim_image_pos_x', String(x)); set('nokdim_image_pos_y', String(y)) }}
+            />
           </Card>
 
           <Card title="תוכן — על הפעילות בנוקדים">
@@ -292,7 +322,7 @@ export default function AdminSettings() {
           </Card>
 
           <div style={{ background: '#f0f7f0', border: '1px solid #c5ddc5', borderRadius: '10px', padding: '12px', fontSize: '12px', color: '#2d5a3d', lineHeight: 1.7 }}>
-            <b>פרטי החוג</b> (יום, שעה, מחיר) נשלפים אוטומטית מהחוג שמוגדר בטבלת "חוגים" ושבשמו מופיעה המילה "נוקדים".
+            <b>המשבצות</b> (ימים, שעה, מחיר, קבוצת גיל) נשלפות אוטומטית מהחוגים שמוגדרים בטאב "חוגים" ומקושרים למיקום "נוקדים".
           </div>
         </>}
 
