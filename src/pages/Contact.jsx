@@ -40,7 +40,7 @@ export default function Contact() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
-    if (!form.name.trim() || !form.email.trim()) { setError('יש למלא שם ואימייל'); return }
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) { setError('יש למלא שם, אימייל וטלפון'); return }
     setSubmitting(true)
     const { error: err } = await supabase.from('contact_submissions').insert({
       name: form.name.trim(),
@@ -52,7 +52,7 @@ export default function Contact() {
     if (ntfyTopic) {
       fetch(`https://ntfy.sh/${ntfyTopic}`, {
         method: 'POST',
-        body: `${form.name} | ${form.phone || form.email}`,
+        body: `שם: ${form.name}\nטלפון: ${form.phone}`,
         headers: {
           'Title': 'פנייה חדשה - אילן טניס',
           'Priority': 'high',
@@ -100,9 +100,9 @@ export default function Contact() {
 
               <div>
                 <label style={{ display: 'block', fontWeight: '700', fontSize: '14px', color: '#333', marginBottom: '6px' }}>
-                  טלפון <span style={{ color: '#aaa', fontWeight: '400' }}>(אופציונלי)</span>
+                  טלפון <span style={{ color: '#dc2626' }}>*</span>
                 </label>
-                <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="050-0000000" style={inputStyle} />
+                <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="050-0000000" style={inputStyle} required />
               </div>
 
               <div>

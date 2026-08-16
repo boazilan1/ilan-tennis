@@ -4,20 +4,8 @@ import { supabase } from '../lib/supabase'
 import SectionCurve from '../components/SectionCurve'
 import Icon from '../components/Icon'
 
-const DAYS_HE = {
-  sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
-  wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת',
-}
-
-function formatDays(a) {
-  const days = a.days_of_week?.length ? a.days_of_week : (a.day_of_week ? [a.day_of_week] : [])
-  return days.map(d => DAYS_HE[d]).filter(Boolean).join(', ')
-}
-
 export default function Activities() {
   const [sections, setSections] = useState([])
-  const [activities, setActivities] = useState([])
-  const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [heroTitle, setHeroTitle] = useState('הפעילויות שלנו')
   const [heroTitleSize, setHeroTitleSize] = useState(30)
@@ -27,13 +15,9 @@ export default function Activities() {
   useEffect(() => {
     Promise.all([
       supabase.from('activity_sections').select('*').order('sort_order'),
-      supabase.from('activities').select('*').order('sort_order').order('time'),
       supabase.from('site_settings').select('key, value').in('key', ['activities_hero_title', 'activities_hero_title_size', 'activities_hero_subtitle', 'activities_hero_subtitle_size']),
-      supabase.from('locations').select('*').order('sort_order'),
-    ]).then(([secRes, actRes, setRes, locRes]) => {
+    ]).then(([secRes, setRes]) => {
       if (secRes.data) setSections(secRes.data)
-      if (actRes.data) setActivities(actRes.data)
-      if (locRes.data) setLocations(locRes.data)
       if (setRes.data) {
         setRes.data.forEach(r => {
           if (r.key === 'activities_hero_title' && r.value) setHeroTitle(r.value)
@@ -101,50 +85,6 @@ export default function Activities() {
               )}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Class cards */}
-      {!loading && activities.length > 0 && (
-        <div style={{ background: 'white', borderTop: '1px solid #eee', padding: '48px 20px' }}>
-          <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-            <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', marginBottom: '6px' }}>משבצות פנויות</h2>
-            <p style={{ color: '#888', marginBottom: '28px', fontSize: '14px' }}>
-              בחרו יום, שעה וקבוצת גיל, ולחצו הרשמה
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px' }}>
-              {activities.map(a => (
-                <div key={a.id} style={{
-                  borderRadius: '16px', border: '1px solid #e8ece8', overflow: 'hidden',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column',
-                }}>
-                  {a.image_url
-                    ? <img src={a.image_url} alt={a.name} style={{ width: '100%', height: '150px', objectFit: 'cover' }} />
-                    : <div style={{ width: '100%', height: '80px', background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ball" size={30} /></div>
-                  }
-                  <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <div style={{ fontWeight: '800', fontSize: '16px', color: '#1a472a' }}>{a.name}</div>
-                    {a.description && <p style={{ margin: 0, fontSize: '13px', color: '#666', lineHeight: 1.6 }}>{a.description}</p>}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '13px', color: '#555', marginTop: '4px' }}>
-                      {a.location_id && locations.find(l => l.id === a.location_id) && (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#1a472a' }}><Icon name="pin" size={15} color="var(--sand)" />{locations.find(l => l.id === a.location_id).name}</span>
-                      )}
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(a)}</span>
-                      {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={15} color="var(--sand)" />{a.time}</span>}
-                      {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={15} color="var(--sand)" />{a.age_group}</span>}
-                      {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{a.price} לחודש</span>}
-                    </div>
-                    <Link to={`/register?activity=${a.id}`} style={{
-                      marginTop: '10px', textAlign: 'center', background: '#1a472a', color: 'white',
-                      textDecoration: 'none', borderRadius: '10px', padding: '9px', fontWeight: '700', fontSize: '13px',
-                    }}>
-                      הרשמה למשבצת זו
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
