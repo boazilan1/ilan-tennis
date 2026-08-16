@@ -18,7 +18,7 @@ const DEFAULTS = {
   nokdim_hero_title: 'נוקדים', nokdim_hero_title_size: '36',
   nokdim_hero_subtitle: 'מיקום חדש שלנו — שני מגרשי טניס, וחוג חדש שיוצא לדרך בקרוב',
   nokdim_hero_cta: 'הרשמה לחוג',
-  nokdim_intro_title: 'טניס בנוקדים',
+  nokdim_intro_title: '',
   nokdim_intro_text: 'אנחנו שמחים לפתוח פעילות חדשה בנוקדים!\nשני מגרשי טניס חדשים, באווירה מקצועית וקהילתית.\nהחוג מתאים לכל הגילאים והרמות — ממתחילים ועד מתקדמים.',
   nokdim_image_url: '', nokdim_image_pos_x: '50', nokdim_image_pos_y: '50',
 }
@@ -82,11 +82,26 @@ export default function Nokdim() {
       {/* Intro */}
       <section style={{ maxWidth: '760px', margin: '0 auto', padding: '56px 20px 20px' }}>
         <div style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
-          <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('nokdim_intro_title')}</h2>
+          {g('nokdim_intro_title') && (
+            <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('nokdim_intro_title')}</h2>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {g('nokdim_intro_text').split('\n').filter(Boolean).map((p, i) => (
-              <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8, paddingRight: '14px', borderRight: '3px solid var(--sand)' }}>{p}</p>
-            ))}
+            {(() => {
+              const paragraphs = g('nokdim_intro_text').split('\n').filter(Boolean)
+              return paragraphs.map((p, i) => {
+                const isFirst = i === 0
+                const isLast = i === paragraphs.length - 1 && paragraphs.length > 1
+                if (isFirst) {
+                  return <p key={i} style={{ margin: '0 0 6px', fontSize: '19px', fontWeight: '800', color: '#1a472a', lineHeight: 1.5 }}>{p}</p>
+                }
+                if (isLast) {
+                  return (
+                    <p key={i} style={{ margin: '14px 0 0', paddingTop: '16px', borderTop: '1px solid #eee', fontSize: '17px', fontWeight: '800', color: '#1a472a', lineHeight: 1.6, textAlign: 'center' }}>{p}</p>
+                  )
+                }
+                return <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8, paddingRight: '14px', borderRight: '3px solid var(--sand)' }}>{p}</p>
+              })
+            })()}
           </div>
         </div>
       </section>
