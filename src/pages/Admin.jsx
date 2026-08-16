@@ -7,12 +7,18 @@ import AdminSections from './AdminSections'
 import AdminContact from './AdminContact'
 import AdminPages from './AdminPages'
 import AdminSettings from './AdminSettings'
+import AdminLocations from './AdminLocations'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
   wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת',
 }
 const DAYS_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
+function formatDays(a) {
+  const days = a.days_of_week?.length ? a.days_of_week : (a.day_of_week ? [a.day_of_week] : [])
+  return days.map(d => DAYS_HE[d]).filter(Boolean).join(', ') || '—'
+}
 
 const STATUS_LABELS = {
   pending:   { label: 'ממתין לתשלום', color: '#d97706', bg: '#fef3c7' },
@@ -21,7 +27,7 @@ const STATUS_LABELS = {
 }
 
 const EMPTY_FORM = {
-  name: '', description: '', day_of_week: 'sunday', age_group: '',
+  name: '', description: '', days_of_week: [], age_group: '', location_id: '',
   time: '', price: '', max_students: '', payment_link: '', image_url: '',
 }
 
@@ -48,6 +54,7 @@ export default function Admin() {
     { key: 'enrollments', label: 'הרשמות' },
     { key: 'trainees',    label: 'מתאמנים' },
     { key: 'activities',  label: 'חוגים' },
+    { key: 'locations',   label: 'מיקומים' },
     { key: 'calendar',    label: 'יומן' },
     { key: 'tournaments', label: 'תחרויות' },
     { key: 'sections',    label: 'תוכן' },
@@ -92,6 +99,7 @@ export default function Admin() {
         {tab === 'enrollments' && <EnrollmentsTab />}
         {tab === 'trainees'    && <TraineesTab />}
         {tab === 'activities'  && <ActivitiesTab />}
+        {tab === 'locations'   && <AdminLocations />}
         {tab === 'calendar'    && <CalendarTab />}
         {tab === 'tournaments' && <TournamentsTab />}
         {tab === 'sections'    && <AdminSections />}
@@ -433,6 +441,7 @@ function TraineesTab() {
 /* ─── Activities Tab ─── */
 function ActivitiesTab() {
   const [activities, setActivities] = useState([])
+  const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -444,9 +453,17 @@ function ActivitiesTab() {
 
   async function fetchActivities() {
     setLoading(true)
-    const { data } = await supabase.from('activities').select('*').order('sort_order').order('day_of_week')
-    if (data) setActivities(data)
+    const [actRes, locRes] = await Promise.all([
+      supabase.from('activities').select('*').order('sort_order').order('time'),
+      supabase.from('locations').select('*').order('sort_order'),
+    ])
+    if (actRes.data) setActivities(actRes.data)
+    if (locRes.data) setLocations(locRes.data)
     setLoading(false)
+  }
+
+  function toggleDay(day) {
+    setForm(f => ({ ...f, days_of_week: f.days_of_week.includes(day) ? f.days_of_week.filter(d => d !== day) : [...f.days_of_week, day] }))
   }
 
   async function moveActivity(id, dir) {
@@ -463,7 +480,12 @@ function ActivitiesTab() {
 
   function openNew() { setForm(EMPTY_FORM); setEditing('new'); setError('') }
   function openEdit(a) {
-    setForm({ name: a.name || '', description: a.description || '', day_of_week: a.day_of_week || 'sunday', age_group: a.age_group || '', time: a.time || '', price: a.price != null ? String(a.price) : '', max_students: a.max_students != null ? String(a.max_students) : '', payment_link: a.payment_link || '', image_url: a.image_url || '' })
+    setForm({
+      name: a.name || '', description: a.description || '',
+      days_of_week: a.days_of_week?.length ? a.days_of_week : (a.day_of_week ? [a.day_of_week] : []),
+      age_group: a.age_group || '', location_id: a.location_id || '',
+      time: a.time || '', price: a.price != null ? String(a.price) : '', max_students: a.max_students != null ? String(a.max_students) : '', payment_link: a.payment_link || '', image_url: a.image_url || '',
+    })
     setEditing(a); setError('')
   }
   function closeForm() { setEditing(null); setError('') }
@@ -473,10 +495,16 @@ function ActivitiesTab() {
     e.preventDefault()
     setError('')
     if (!form.name.trim()) { setError('יש להזין שם חוג'); return }
+    if (form.days_of_week.length === 0) { setError('יש לבחור לפחות יום אחד'); return }
     if (!form.time.trim()) { setError('יש להזין שעה'); return }
     if (!form.price || isNaN(Number(form.price))) { setError('יש להזין מחיר תקין'); return }
     setSaving(true)
-    const payload = { name: form.name.trim(), description: form.description.trim() || null, day_of_week: form.day_of_week, age_group: form.age_group.trim() || null, time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null, image_url: form.image_url.trim() || null }
+    const payload = {
+      name: form.name.trim(), description: form.description.trim() || null,
+      days_of_week: form.days_of_week, day_of_week: form.days_of_week[0] || null,
+      age_group: form.age_group.trim() || null, location_id: form.location_id || null,
+      time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null, image_url: form.image_url.trim() || null,
+    }
     const maxOrder = activities.length ? Math.max(...activities.map(a => a.sort_order || 0)) : 0
     const res = editing === 'new' ? await supabase.from('activities').insert({ ...payload, sort_order: maxOrder + 1 }) : await supabase.from('activities').update(payload).eq('id', editing.id)
     if (res.error) { setError('שגיאה בשמירה') } else { await fetchActivities(); closeForm() }
@@ -505,10 +533,26 @@ function ActivitiesTab() {
           <form onSubmit={handleSave} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>שם החוג *</label><input name="name" value={form.name} onChange={handleChange} placeholder="טניס למתחילים" style={inputStyle} /></div>
             <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>תיאור</label><input name="description" value={form.description} onChange={handleChange} placeholder="תיאור קצר" style={inputStyle} /></div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>ימים בשבוע * (אפשר לבחור כמה)</label>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {DAYS_ORDER.map(d => {
+                  const active = form.days_of_week.includes(d)
+                  return (
+                    <button key={d} type="button" onClick={() => toggleDay(d)} style={{
+                      background: active ? '#1a472a' : '#fff', color: active ? '#fff' : '#555',
+                      border: `1px solid ${active ? '#1a472a' : '#ddd'}`, borderRadius: '20px',
+                      padding: '7px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: active ? '700' : '400',
+                    }}>{DAYS_HE[d]}</button>
+                  )
+                })}
+              </div>
+            </div>
             <div>
-              <label style={labelStyle}>יום בשבוע *</label>
-              <select name="day_of_week" value={form.day_of_week} onChange={handleChange} style={inputStyle}>
-                {DAYS_ORDER.map(d => <option key={d} value={d}>יום {DAYS_HE[d]}</option>)}
+              <label style={labelStyle}>מיקום</label>
+              <select name="location_id" value={form.location_id} onChange={handleChange} style={inputStyle}>
+                <option value="">— ללא מיקום —</option>
+                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
             </div>
             <div><label style={labelStyle}>שעה *</label><input name="time" value={form.time} onChange={handleChange} placeholder="17:00" style={inputStyle} /></div>
@@ -540,8 +584,11 @@ function ActivitiesTab() {
                 {a.description && <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{a.description}</div>}
               </div>
               <div style={{ fontSize: '13px', color: '#555', minWidth: '180px' }}>
-                <div style={{ fontWeight: '500' }}>📅 יום {DAYS_HE[a.day_of_week]} · 🕐 {a.time}{a.age_group ? ` · 🎯 ${a.age_group}` : ''}</div>
-                <div style={{ marginTop: '3px', color: '#888' }}>💰 ₪{a.price} לחודש{a.max_students ? ` · 👥 עד ${a.max_students}` : ''}</div>
+                <div style={{ fontWeight: '500' }}>📅 {formatDays(a)} · 🕐 {a.time}{a.age_group ? ` · 🎯 ${a.age_group}` : ''}</div>
+                <div style={{ marginTop: '3px', color: '#888' }}>
+                  💰 ₪{a.price} לחודש{a.max_students ? ` · 👥 עד ${a.max_students}` : ''}
+                  {a.location_id && locations.find(l => l.id === a.location_id) ? ` · 📍 ${locations.find(l => l.id === a.location_id).name}` : ''}
+                </div>
               </div>
               <div style={{ fontSize: '12px', fontWeight: '600', color: a.payment_link ? '#16a34a' : '#ccc' }}>
                 {a.payment_link ? '🔗 קישור תשלום' : '🔗 ללא קישור'}
@@ -961,7 +1008,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {weekDays.map(({ key, date }) => {
-                const dayActivities = activities.filter(a => a.day_of_week === key)
+                const dayActivities = activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(key))
                 const dayEvents = getEventsForDay(key, date)
                 const today = isToday(date)
                 const hasItems = dayActivities.length > 0 || dayEvents.length > 0
@@ -1047,7 +1094,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '3px' }}>
                   {week.map(({ date, inMonth }, di) => {
                     const dayKey = DAYS_ORDER[date.getDay()]
-                    const dayActivities = inMonth ? activities.filter(a => a.day_of_week === dayKey) : []
+                    const dayActivities = inMonth ? activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey)) : []
                     const dayEvents = inMonth ? getEventsForDay(dayKey, date) : []
                     const allItems = [...dayActivities.map(a => ({ type: 'activity', item: a })), ...dayEvents.map(ev => ({ type: 'event', item: ev }))]
                     const today = isToday(date)

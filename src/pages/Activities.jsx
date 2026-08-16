@@ -9,9 +9,15 @@ const DAYS_HE = {
   wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת',
 }
 
+function formatDays(a) {
+  const days = a.days_of_week?.length ? a.days_of_week : (a.day_of_week ? [a.day_of_week] : [])
+  return days.map(d => DAYS_HE[d]).filter(Boolean).join(', ')
+}
+
 export default function Activities() {
   const [sections, setSections] = useState([])
   const [activities, setActivities] = useState([])
+  const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [heroTitle, setHeroTitle] = useState('הפעילויות שלנו')
   const [heroTitleSize, setHeroTitleSize] = useState(30)
@@ -21,11 +27,13 @@ export default function Activities() {
   useEffect(() => {
     Promise.all([
       supabase.from('activity_sections').select('*').order('sort_order'),
-      supabase.from('activities').select('*').order('sort_order').order('day_of_week'),
+      supabase.from('activities').select('*').order('sort_order').order('time'),
       supabase.from('site_settings').select('key, value').in('key', ['activities_hero_title', 'activities_hero_title_size', 'activities_hero_subtitle', 'activities_hero_subtitle_size']),
-    ]).then(([secRes, actRes, setRes]) => {
+      supabase.from('locations').select('*').order('sort_order'),
+    ]).then(([secRes, actRes, setRes, locRes]) => {
       if (secRes.data) setSections(secRes.data)
       if (actRes.data) setActivities(actRes.data)
+      if (locRes.data) setLocations(locRes.data)
       if (setRes.data) {
         setRes.data.forEach(r => {
           if (r.key === 'activities_hero_title' && r.value) setHeroTitle(r.value)
@@ -118,11 +126,13 @@ export default function Activities() {
                     <div style={{ fontWeight: '800', fontSize: '16px', color: '#1a472a' }}>{a.name}</div>
                     {a.description && <p style={{ margin: 0, fontSize: '13px', color: '#666', lineHeight: 1.6 }}>{a.description}</p>}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '13px', color: '#555', marginTop: '4px' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />יום {DAYS_HE[a.day_of_week] || a.day_of_week}</span>
+                      {a.location_id && locations.find(l => l.id === a.location_id) && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', color: '#1a472a' }}><Icon name="pin" size={15} color="var(--sand)" />{locations.find(l => l.id === a.location_id).name}</span>
+                      )}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(a)}</span>
                       {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={15} color="var(--sand)" />{a.time}</span>}
                       {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={15} color="var(--sand)" />{a.age_group}</span>}
                       {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{a.price} לחודש</span>}
-                      {a.max_students && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="pin" size={15} color="var(--sand)" />עד {a.max_students} תלמידים</span>}
                     </div>
                     <Link to={`/register?activity=${a.id}`} style={{
                       marginTop: '10px', textAlign: 'center', background: '#1a472a', color: 'white',

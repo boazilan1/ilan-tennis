@@ -9,6 +9,11 @@ const DAYS_HE = {
   wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת',
 }
 
+function formatDays(a) {
+  const days = a.days_of_week?.length ? a.days_of_week : (a.day_of_week ? [a.day_of_week] : [])
+  return days.map(d => DAYS_HE[d]).filter(Boolean).join(', ')
+}
+
 const DEFAULTS = {
   nokdim_hero_title: 'נוקדים', nokdim_hero_title_size: '36',
   nokdim_hero_subtitle: 'מיקום חדש שלנו — שני מגרשי טניס, וחוג חדש שיוצא לדרך בקרוב',
@@ -24,18 +29,24 @@ export default function Nokdim() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('site_settings').select('key, value').like('key', 'nokdim_%'),
-      supabase.from('activities').select('*').ilike('name', '%נוקדים%').limit(1).maybeSingle(),
-    ]).then(([settingsRes, activityRes]) => {
+    async function load() {
+      const [settingsRes, locationRes] = await Promise.all([
+        supabase.from('site_settings').select('key, value').like('key', 'nokdim_%'),
+        supabase.from('locations').select('id').eq('name', 'נוקדים').maybeSingle(),
+      ])
       if (settingsRes.data) {
         const map = {}
         settingsRes.data.forEach(r => { if (r.value) map[r.key] = r.value })
         setS(prev => ({ ...prev, ...map }))
       }
-      if (activityRes.data) setActivity(activityRes.data)
+      const activityQuery = locationRes.data
+        ? supabase.from('activities').select('*').eq('location_id', locationRes.data.id).limit(1).maybeSingle()
+        : supabase.from('activities').select('*').ilike('name', '%נוקדים%').limit(1).maybeSingle()
+      const { data: activityData } = await activityQuery
+      if (activityData) setActivity(activityData)
       setLoading(false)
-    })
+    }
+    load()
   }, [])
 
   const g = k => s[k] || DEFAULTS[k] || ''
@@ -92,7 +103,7 @@ export default function Nokdim() {
               <div style={{ fontWeight: '800', fontSize: '19px', color: '#1a472a' }}>{activity.name}</div>
               {activity.description && <p style={{ margin: 0, color: '#333', fontSize: '14px' }}>{activity.description}</p>}
               <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', justifyContent: 'center', fontSize: '15px', color: '#333' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />יום {DAYS_HE[activity.day_of_week] || activity.day_of_week}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />{formatDays(activity)}</span>
                 {activity.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={17} color="var(--sand)" />{activity.time}</span>}
                 {activity.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{activity.price} לחודש</span>}
               </div>

@@ -16,6 +16,11 @@ const DAYS_HE = {
   saturday: 'שבת',
 }
 
+function formatDays(a) {
+  const days = a.days_of_week?.length ? a.days_of_week : (a.day_of_week ? [a.day_of_week] : [])
+  return days.map(d => DAYS_HE[d]).filter(Boolean).join(', ')
+}
+
 export default function Register() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -24,6 +29,8 @@ export default function Register() {
   const activityId = searchParams.get('activity')
 
   const [allActivities, setAllActivities] = useState([])
+  const [locations, setLocations] = useState([])
+  const [locationFilter, setLocationFilter] = useState('all')
   const [activity, setActivity] = useState(null)
   const [players, setPlayers] = useState([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
@@ -49,8 +56,12 @@ export default function Register() {
       return
     }
     if (!activityId) {
-      supabase.from('activities').select('*').order('day_of_week').then(({ data }) => {
-        if (data) setAllActivities(data)
+      Promise.all([
+        supabase.from('activities').select('*').order('time'),
+        supabase.from('locations').select('*').order('sort_order'),
+      ]).then(([actRes, locRes]) => {
+        if (actRes.data) setAllActivities(actRes.data)
+        if (locRes.data) setLocations(locRes.data)
         setLoading(false)
       })
       return
@@ -146,13 +157,32 @@ export default function Register() {
   }
 
   if (!activityId) {
+    const filteredActivities = locationFilter === 'all' ? allActivities : allActivities.filter(a => a.location_id === locationFilter)
     return (
       <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3', padding: '40px 20px' }}>
         <div style={{ maxWidth: '560px', margin: '0 auto' }}>
           <h1 style={{ color: '#1a472a', fontSize: '24px', fontWeight: '800', marginBottom: '6px' }}>הרשמה לחוג</h1>
-          <p style={{ color: '#888', marginBottom: '28px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
+          <p style={{ color: '#888', marginBottom: '20px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
+
+          {locations.length > 0 && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '24px' }}>
+              <button onClick={() => setLocationFilter('all')} style={{
+                background: locationFilter === 'all' ? '#1a472a' : '#fff', color: locationFilter === 'all' ? '#fff' : '#555',
+                border: `1px solid ${locationFilter === 'all' ? '#1a472a' : '#ddd'}`, borderRadius: '20px',
+                padding: '7px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: locationFilter === 'all' ? '700' : '400',
+              }}>הכל</button>
+              {locations.map(l => (
+                <button key={l.id} onClick={() => setLocationFilter(l.id)} style={{
+                  background: locationFilter === l.id ? '#1a472a' : '#fff', color: locationFilter === l.id ? '#fff' : '#555',
+                  border: `1px solid ${locationFilter === l.id ? '#1a472a' : '#ddd'}`, borderRadius: '20px',
+                  padding: '7px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: locationFilter === l.id ? '700' : '400',
+                }}>{l.name}</button>
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {allActivities.map(a => (
+            {filteredActivities.map(a => (
               <button key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
                 background: 'white', border: '1px solid #e8ece8', borderRight: '4px solid #1a472a',
                 borderRadius: '14px', padding: '18px 20px', cursor: 'pointer', textAlign: 'right',
@@ -161,14 +191,17 @@ export default function Register() {
                 <div style={{ fontWeight: '800', fontSize: '17px', color: '#1a472a' }}>{a.name}</div>
                 {a.description && <div style={{ fontSize: '13px', color: '#666' }}>{a.description}</div>}
                 <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#555', flexWrap: 'wrap', marginTop: '2px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="calendar" size={14} color="var(--sand)" />יום {DAYS_HE[a.day_of_week]}</span>
+                  {a.location_id && locations.find(l => l.id === a.location_id) && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '700', color: '#1a472a' }}><Icon name="pin" size={14} color="var(--sand)" />{locations.find(l => l.id === a.location_id).name}</span>
+                  )}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="calendar" size={14} color="var(--sand)" />{formatDays(a)}</span>
                   {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="clock" size={14} color="var(--sand)" />{a.time}</span>}
                   {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="users" size={14} color="var(--sand)" />{a.age_group}</span>}
                   {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="tag" size={14} color="var(--sand)" />₪{a.price} לחודש</span>}
                 </div>
               </button>
             ))}
-            {allActivities.length === 0 && <p style={{ color: '#bbb', textAlign: 'center' }}>אין חוגים זמינים כרגע</p>}
+            {filteredActivities.length === 0 && <p style={{ color: '#bbb', textAlign: 'center' }}>אין חוגים זמינים כרגע</p>}
           </div>
         </div>
       </main>
@@ -211,7 +244,7 @@ export default function Register() {
       {/* פרטי החוג */}
       <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
         <h3 style={{ margin: '0 0 8px', color: '#1a472a' }}>{activity.name}</h3>
-        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />יום {DAYS_HE[activity.day_of_week] || activity.day_of_week} בשעה {activity.time}</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(activity)} בשעה {activity.time}</p>
         <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{activity.price} לחודש</p>
       </div>
 
