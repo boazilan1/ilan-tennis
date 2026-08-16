@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 
+const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לחוג, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
+
 const DAYS_HE = {
   sunday: 'ראשון',
   monday: 'שני',
@@ -33,6 +35,13 @@ export default function Register() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success] = useState(false)
+  const [termsAccepted, setTermsAccepted] = useState(false)
+  const [termsText, setTermsText] = useState(DEFAULT_TERMS)
+
+  useEffect(() => {
+    supabase.from('site_settings').select('value').eq('key', 'register_terms_text').maybeSingle()
+      .then(({ data }) => { if (data?.value) setTermsText(data.value) })
+  }, [])
 
   useEffect(() => {
     if (!user) {
@@ -61,6 +70,12 @@ export default function Register() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+
+    if (!termsAccepted) {
+      setError('יש לאשר את תנאי ההרשמה כדי להמשיך')
+      return
+    }
+
     setSubmitting(true)
 
     try {
@@ -99,7 +114,7 @@ export default function Register() {
 
       const { error: enrollError } = await supabase
         .from('enrollments')
-        .insert({ user_id: user.id, player_id: playerId, activity_id: activityId, status: 'pending' })
+        .insert({ user_id: user.id, player_id: playerId, activity_id: activityId, status: 'pending', terms_accepted_at: new Date().toISOString() })
 
       if (enrollError) {
         if (enrollError.code === '23505') {
@@ -148,6 +163,7 @@ export default function Register() {
                 <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#555', flexWrap: 'wrap', marginTop: '2px' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="calendar" size={14} color="var(--sand)" />יום {DAYS_HE[a.day_of_week]}</span>
                   {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="clock" size={14} color="var(--sand)" />{a.time}</span>}
+                  {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="users" size={14} color="var(--sand)" />{a.age_group}</span>}
                   {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="tag" size={14} color="var(--sand)" />₪{a.price} לחודש</span>}
                 </div>
               </button>
@@ -302,6 +318,19 @@ export default function Register() {
           </div>
         )}
 
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer',
+          background: '#f8faf8', border: '1px solid #e0e8e0', borderRadius: '10px', padding: '14px',
+        }}>
+          <input
+            type="checkbox"
+            checked={termsAccepted}
+            onChange={e => setTermsAccepted(e.target.checked)}
+            style={{ marginTop: '3px', flexShrink: 0 }}
+          />
+          <span style={{ fontSize: '13px', color: '#444', lineHeight: 1.6 }}>{termsText}</span>
+        </label>
+
         {error && (
           <p style={{ color: '#c00', background: '#fff0f0', padding: '10px', borderRadius: '8px', margin: 0, fontSize: '14px' }}>
             {error}
@@ -310,7 +339,7 @@ export default function Register() {
 
         <button
           type="submit"
-          disabled={submitting || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
+          disabled={submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
           style={{
             background: '#1a472a',
             color: '#fff',
@@ -320,7 +349,7 @@ export default function Register() {
             fontSize: '16px',
             fontWeight: 'bold',
             cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: (submitting || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
+            opacity: (submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
           }}
         >
           {submitting ? 'רושם...' : 'אישור הרשמה'}

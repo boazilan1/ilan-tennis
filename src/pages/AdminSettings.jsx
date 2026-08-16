@@ -24,6 +24,7 @@ const ALL_KEYS = [
   'header_logo_text','footer_title','footer_subtitle','footer_email',
   'nokdim_hero_title','nokdim_hero_title_size','nokdim_hero_subtitle','nokdim_hero_cta',
   'nokdim_intro_title','nokdim_intro_text','nokdim_image_url',
+  'register_terms_text',
 ]
 
 function SizeInput({ value, onChange }) {
@@ -301,6 +302,10 @@ export default function AdminSettings() {
               size={{ value: g('activities_hero_title_size') || '30', onChange: v => set('activities_hero_title_size', v) }} />
             <Field label="כותרת משנה" value={g('activities_hero_subtitle')} onChange={v => set('activities_hero_subtitle', v)} textarea
               size={{ value: g('activities_hero_subtitle_size') || '16', onChange: v => set('activities_hero_subtitle_size', v) }} />
+          </Card>
+
+          <Card title="הרשמה — תנאי הרשמה">
+            <Field label="נוסח האישור (מוצג עם תיבת סימון בטופס ההרשמה)" value={g('register_terms_text')} onChange={v => set('register_terms_text', v)} textarea />
           </Card>
 
           <Card title="דף יצירת קשר — כותרת עליונה">

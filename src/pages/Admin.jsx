@@ -21,7 +21,7 @@ const STATUS_LABELS = {
 }
 
 const EMPTY_FORM = {
-  name: '', description: '', day_of_week: 'sunday',
+  name: '', description: '', day_of_week: 'sunday', age_group: '',
   time: '', price: '', max_students: '', payment_link: '', image_url: '',
 }
 
@@ -463,7 +463,7 @@ function ActivitiesTab() {
 
   function openNew() { setForm(EMPTY_FORM); setEditing('new'); setError('') }
   function openEdit(a) {
-    setForm({ name: a.name || '', description: a.description || '', day_of_week: a.day_of_week || 'sunday', time: a.time || '', price: a.price != null ? String(a.price) : '', max_students: a.max_students != null ? String(a.max_students) : '', payment_link: a.payment_link || '', image_url: a.image_url || '' })
+    setForm({ name: a.name || '', description: a.description || '', day_of_week: a.day_of_week || 'sunday', age_group: a.age_group || '', time: a.time || '', price: a.price != null ? String(a.price) : '', max_students: a.max_students != null ? String(a.max_students) : '', payment_link: a.payment_link || '', image_url: a.image_url || '' })
     setEditing(a); setError('')
   }
   function closeForm() { setEditing(null); setError('') }
@@ -476,7 +476,7 @@ function ActivitiesTab() {
     if (!form.time.trim()) { setError('יש להזין שעה'); return }
     if (!form.price || isNaN(Number(form.price))) { setError('יש להזין מחיר תקין'); return }
     setSaving(true)
-    const payload = { name: form.name.trim(), description: form.description.trim() || null, day_of_week: form.day_of_week, time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null, image_url: form.image_url.trim() || null }
+    const payload = { name: form.name.trim(), description: form.description.trim() || null, day_of_week: form.day_of_week, age_group: form.age_group.trim() || null, time: form.time.trim(), price: Number(form.price), max_students: form.max_students ? Number(form.max_students) : null, payment_link: form.payment_link.trim() || null, image_url: form.image_url.trim() || null }
     const maxOrder = activities.length ? Math.max(...activities.map(a => a.sort_order || 0)) : 0
     const res = editing === 'new' ? await supabase.from('activities').insert({ ...payload, sort_order: maxOrder + 1 }) : await supabase.from('activities').update(payload).eq('id', editing.id)
     if (res.error) { setError('שגיאה בשמירה') } else { await fetchActivities(); closeForm() }
@@ -512,6 +512,7 @@ function ActivitiesTab() {
               </select>
             </div>
             <div><label style={labelStyle}>שעה *</label><input name="time" value={form.time} onChange={handleChange} placeholder="17:00" style={inputStyle} /></div>
+            <div><label style={labelStyle}>קבוצת גיל</label><input name="age_group" value={form.age_group} onChange={handleChange} placeholder="8-12 / מבוגרים" style={inputStyle} /></div>
             <div><label style={labelStyle}>מחיר לחודש (₪) *</label><input name="price" value={form.price} onChange={handleChange} type="number" min="0" placeholder="300" style={inputStyle} /></div>
             <div><label style={labelStyle}>מקסימום תלמידים</label><input name="max_students" value={form.max_students} onChange={handleChange} type="number" min="1" placeholder="10" style={inputStyle} /></div>
             <div style={{ gridColumn: '1 / -1' }}>
@@ -539,7 +540,7 @@ function ActivitiesTab() {
                 {a.description && <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{a.description}</div>}
               </div>
               <div style={{ fontSize: '13px', color: '#555', minWidth: '180px' }}>
-                <div style={{ fontWeight: '500' }}>📅 יום {DAYS_HE[a.day_of_week]} · 🕐 {a.time}</div>
+                <div style={{ fontWeight: '500' }}>📅 יום {DAYS_HE[a.day_of_week]} · 🕐 {a.time}{a.age_group ? ` · 🎯 ${a.age_group}` : ''}</div>
                 <div style={{ marginTop: '3px', color: '#888' }}>💰 ₪{a.price} לחודש{a.max_students ? ` · 👥 עד ${a.max_students}` : ''}</div>
               </div>
               <div style={{ fontSize: '12px', fontWeight: '600', color: a.payment_link ? '#16a34a' : '#ccc' }}>

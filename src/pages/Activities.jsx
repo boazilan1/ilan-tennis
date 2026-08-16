@@ -100,9 +100,9 @@ export default function Activities() {
       {!loading && activities.length > 0 && (
         <div style={{ background: 'white', borderTop: '1px solid #eee', padding: '48px 20px' }}>
           <div style={{ maxWidth: '860px', margin: '0 auto' }}>
-            <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', marginBottom: '6px' }}>לוח החוגים</h2>
+            <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', marginBottom: '6px' }}>משבצות פנויות</h2>
             <p style={{ color: '#888', marginBottom: '28px', fontSize: '14px' }}>
-              להרשמה — <Link to="/register" style={{ color: '#1a472a', fontWeight: '600' }}>לחצו כאן</Link>
+              בחרו יום, שעה וקבוצת גיל, ולחצו הרשמה
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px' }}>
               {activities.map(a => (
@@ -112,7 +112,7 @@ export default function Activities() {
                 }}>
                   {a.image_url
                     ? <img src={a.image_url} alt={a.name} style={{ width: '100%', height: '150px', objectFit: 'cover' }} />
-                    : <div style={{ width: '100%', height: '80px', background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ball" size={30} color="rgba(255,255,255,0.9)" /></div>
+                    : <div style={{ width: '100%', height: '80px', background: 'linear-gradient(135deg, #1a472a, #2d6a4f)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name="ball" size={30} /></div>
                   }
                   <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ fontWeight: '800', fontSize: '16px', color: '#1a472a' }}>{a.name}</div>
@@ -120,9 +120,16 @@ export default function Activities() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '13px', color: '#555', marginTop: '4px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />יום {DAYS_HE[a.day_of_week] || a.day_of_week}</span>
                       {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={15} color="var(--sand)" />{a.time}</span>}
+                      {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={15} color="var(--sand)" />{a.age_group}</span>}
                       {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{a.price} לחודש</span>}
-                      {a.max_students && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={15} color="var(--sand)" />עד {a.max_students} תלמידים</span>}
+                      {a.max_students && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="pin" size={15} color="var(--sand)" />עד {a.max_students} תלמידים</span>}
                     </div>
+                    <Link to={`/register?activity=${a.id}`} style={{
+                      marginTop: '10px', textAlign: 'center', background: '#1a472a', color: 'white',
+                      textDecoration: 'none', borderRadius: '10px', padding: '9px', fontWeight: '700', fontSize: '13px',
+                    }}>
+                      הרשמה למשבצת זו
+                    </Link>
                   </div>
                 </div>
               ))}
