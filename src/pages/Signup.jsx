@@ -16,18 +16,39 @@ export default function Signup() {
     setError('')
     setLoading(true)
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } }
-    })
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name: fullName } }
+      })
 
-    if (error) setError(error.message)
-    else {
-      await supabase.from('profiles').upsert({ id: (await supabase.auth.getUser()).data.user.id, full_name: fullName, phone })
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      if (!data.user) {
+        setError('אירעה שגיאה בהרשמה, נסה שוב')
+        return
+      }
+
+      await supabase.from('profiles').upsert({ id: data.user.id, full_name: fullName, phone })
+
+      if (!data.session) {
+        setError('')
+        alert('נשלח אליך מייל לאימות החשבון. יש לאשר אותו לפני הכניסה למערכת.')
+        navigate('/login')
+        return
+      }
+
       navigate('/')
+    } catch (err) {
+      setError('אירעה שגיאה, נסה שוב')
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
