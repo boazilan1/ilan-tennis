@@ -29,7 +29,7 @@ export default function Footer() {
       fontSize: '14px', marginTop: 'auto',
     }}>
       <p style={{ margin: '0 0 6px', fontWeight: 'bold', color: 'white', fontSize: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-        {logoUrl ? <img src={logoUrl} alt="" style={{ height: '20px', width: '20px', objectFit: 'contain', borderRadius: '50%' }} /> : <Icon name="ball" size={18} />}{title}
+        {logoUrl ? <img src={logoUrl} alt="" style={{ height: '30px', width: 'auto', objectFit: 'contain', display: 'block' }} /> : <Icon name="ball" size={18} />}{title}
       </p>
       {subtitle && <p style={{ margin: '0 0 12px', opacity: 0.75, fontSize: '13px' }}>{subtitle}</p>}
 

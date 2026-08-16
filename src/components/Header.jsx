@@ -54,7 +54,7 @@ export default function Header() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '64px' }}>
         <Link to="/" style={{ textDecoration: 'none', color: 'white', display: 'flex', alignItems: 'center', gap: '10px' }} onClick={() => setMenuOpen(false)}>
-          {logoUrl ? <img src={logoUrl} alt="" style={{ height: '32px', width: '32px', objectFit: 'contain', borderRadius: '50%' }} /> : <Icon name="ball" size={26} />}
+          {logoUrl ? <img src={logoUrl} alt="" style={{ height: '44px', width: 'auto', objectFit: 'contain', display: 'block' }} /> : <Icon name="ball" size={26} />}
           <span style={{ fontWeight: 'bold', fontSize: '20px' }}>{logoText}</span>
         </Link>
 
