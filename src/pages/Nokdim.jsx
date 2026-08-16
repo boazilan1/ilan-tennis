@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import SectionCurve from '../components/SectionCurve'
+import Icon from '../components/Icon'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -17,6 +18,7 @@ const DEFAULTS = {
   nokdim_hero_title: 'נוקדים', nokdim_hero_title_size: '36',
   nokdim_hero_subtitle: 'מיקום חדש שלנו — שני מגרשי טניס, וחוג חדש שיוצא לדרך בקרוב',
   nokdim_hero_cta: 'הרשמה לחוג',
+  nokdim_intro_title: 'טניס בנוקדים',
   nokdim_intro_text: 'אנחנו שמחים לפתוח פעילות חדשה בנוקדים!\nשני מגרשי טניס חדשים, באווירה מקצועית וקהילתית.\nהחוג מתאים לכל הגילאים והרמות — ממתחילים ועד מתקדמים.',
   nokdim_image_url: '', nokdim_image_pos_x: '50', nokdim_image_pos_y: '50',
 }
@@ -77,54 +79,60 @@ export default function Nokdim() {
         <SectionCurve fill="#f3f6f3" />
       </section>
 
-      {/* Content card */}
-      <section style={{ maxWidth: '600px', margin: '0 auto', padding: '56px 20px 56px' }}>
-        <div style={{ background: 'white', borderRadius: '4px', boxShadow: '0 2px 20px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-
-          {/* Intro */}
-          <div style={{ padding: '30px 30px 26px', borderBottom: '1px solid #eee' }}>
-            <div style={{ fontSize: '13px', lineHeight: 1.9, color: '#555' }}>
-              {g('nokdim_intro_text').split('\n').filter(Boolean).join(' ')}
-            </div>
+      {/* Intro */}
+      <section style={{ maxWidth: '760px', margin: '0 auto', padding: '56px 20px 20px' }}>
+        <div style={{ background: 'white', borderRadius: '18px', padding: '32px 28px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
+          <h2 style={{ color: '#1a472a', fontSize: '22px', fontWeight: '800', margin: '0 0 16px' }}>{g('nokdim_intro_title')}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {g('nokdim_intro_text').split('\n').filter(Boolean).map((p, i) => (
+              <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8, paddingRight: '14px', borderRight: '3px solid var(--sand)' }}>{p}</p>
+            ))}
           </div>
-
-          {/* Schedule table */}
-          {!loading && (
-            <div style={{ padding: '26px 30px 30px' }}>
-              <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '1px', color: '#aaa', marginBottom: '16px' }}>לוח זמנים</div>
-
-              {slots.length > 0 ? (
-                <>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                    <tbody>
-                      {slots.map((slot, i) => (
-                        <tr key={slot.id} style={{ borderBottom: i < slots.length - 1 ? '1px solid #eee' : 'none' }}>
-                          <td style={{ padding: '12px 0', color: '#1a472a', fontWeight: '600' }}>{formatDays(slot)}</td>
-                          <td style={{ padding: '12px 0', color: '#555' }}>{slot.time}</td>
-                          <td style={{ padding: '12px 0', color: '#888', textAlign: 'left' }}>{slot.age_group}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <Link to={registerLink} style={{
-                      background: '#1a472a', color: 'white', textDecoration: 'none',
-                      borderRadius: '3px', padding: '12px 30px', fontWeight: '600', fontSize: '14px', letterSpacing: '0.3px',
-                    }}>{g('nokdim_hero_cta')}</Link>
-                  </div>
-                </>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-                  <p style={{ margin: 0, fontSize: '14px', color: '#888' }}>פרטי החוג בנוקדים יתפרסמו בקרוב</p>
-                  <Link to="/contact" style={{
-                    color: '#1a472a', textDecoration: 'none', fontWeight: '600', fontSize: '13px', borderBottom: '1px solid #1a472a',
-                  }}>השאירו פרטים ונעדכן אתכם</Link>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </section>
+
+      {/* Schedule */}
+      {!loading && (
+        <section style={{ maxWidth: '760px', margin: '0 auto', padding: '20px 20px 56px' }}>
+          {slots.length > 0 ? (
+            <div style={{
+              background: '#e8f5e9', border: '1px solid #c5ddc5', borderRadius: '18px',
+              padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px', alignItems: 'center', textAlign: 'center',
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                {slots.map(slot => (
+                  <div key={slot.id} style={{
+                    display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center',
+                    fontSize: '15px', color: '#333', background: 'white', borderRadius: '12px', padding: '14px 18px',
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />{formatDays(slot)}</span>
+                    {slot.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={17} color="var(--sand)" />{slot.time}</span>}
+                    {slot.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={17} color="var(--sand)" />{slot.age_group}</span>}
+                    {slot.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{slot.price} לחודש</span>}
+                  </div>
+                ))}
+              </div>
+              <Link to={registerLink} style={{
+                background: '#1a472a', color: 'white', textDecoration: 'none',
+                borderRadius: '30px', padding: '12px 36px', fontWeight: '700', fontSize: '15px',
+                boxShadow: '0 4px 14px rgba(26,71,42,0.25)',
+              }}>{g('nokdim_hero_cta')}</Link>
+            </div>
+          ) : (
+            <div style={{
+              background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '18px',
+              padding: '28px', textAlign: 'center', color: '#7c5a00',
+            }}>
+              <div style={{ marginBottom: '10px' }}><Icon name="clock" size={30} color="#b45309" /></div>
+              <p style={{ margin: '0 0 16px', fontSize: '15px' }}>פרטי החוג בנוקדים יתפרסמו בקרוב</p>
+              <Link to="/contact" style={{
+                display: 'inline-block', background: '#1a472a', color: 'white', textDecoration: 'none',
+                borderRadius: '30px', padding: '10px 28px', fontWeight: '700', fontSize: '14px',
+              }}>השאירו פרטים ונעדכן אתכם</Link>
+            </div>
+          )}
+        </section>
+      )}
     </main>
   )
 }
