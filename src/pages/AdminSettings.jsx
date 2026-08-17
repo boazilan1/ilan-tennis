@@ -14,7 +14,6 @@ const ALL_KEYS = [
   'home_f1_icon','home_f1_title','home_f1_text',
   'home_f2_icon','home_f2_title','home_f2_text',
   'home_f3_icon','home_f3_title','home_f3_text',
-  'home_f4_icon','home_f4_title','home_f4_text',
   'home_l1_icon','home_l1_title','home_l1_text',
   'home_l2_icon','home_l2_title','home_l2_text',
   'home_l3_icon','home_l3_title','home_l3_text',
@@ -309,9 +308,9 @@ export default function AdminSettings() {
             <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = הסקשן לא יוצג בעמוד</div>
           </Card>
 
-          <Card title="כרטיסי יתרונות (4 כרטיסים)">
-            {[1,2,3,4].map(i => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 2fr', gap: '10px', marginBottom: '14px', paddingBottom: '14px', borderBottom: i < 4 ? '1px solid #f0f0f0' : 'none', alignItems: 'start' }}>
+          <Card title="כרטיסי יתרונות (3 כרטיסים)">
+            {[1,2,3].map(i => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 2fr', gap: '10px', marginBottom: '14px', paddingBottom: '14px', borderBottom: i < 3 ? '1px solid #f0f0f0' : 'none', alignItems: 'start' }}>
                 <Field label="אייקון" value={g(`home_f${i}_icon`)} onChange={v => set(`home_f${i}_icon`, v)} emoji />
                 <Field label="כותרת" value={g(`home_f${i}_title`)} onChange={v => set(`home_f${i}_title`, v)} />
                 <Field label="תיאור" value={g(`home_f${i}_text`)} onChange={v => set(`home_f${i}_text`, v)} textarea />

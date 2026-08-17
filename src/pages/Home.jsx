@@ -14,8 +14,7 @@ const DEFAULTS = {
   home_locations_title: 'היכן אנחנו פועלים',
   home_f1_icon: 'trophy', home_f1_title: 'אימון מקצועי', home_f1_text: 'תוכניות אימון מותאמות אישית לכל שחקן, מתחילים ועד מתקדמים',
   home_f2_icon: 'users', home_f2_title: 'לכל הגילאים', home_f2_text: 'ילדים, נוער ומבוגרים — קבוצות לפי גיל ורמה',
-  home_f3_icon: 'pin', home_f3_title: 'מספר מיקומים', home_f3_text: 'פעילות בציפורי, גבעת זאב ובתי ספר באזור ירושלים',
-  home_f4_icon: 'cap', home_f4_title: 'מאמן מוסמך', home_f4_text: 'הכשרה מקצועית עם דגש על פיתוח גופני, תיאום ושמחת המשחק',
+  home_f3_icon: 'pin', home_f3_title: 'מספר מיקומים', home_f3_text: 'פעילות בציפורי, גבעת זאב, נוקדים ובתי ספר באזור ירושלים',
   home_l1_icon: 'ball', home_l1_title: 'ציפורי', home_l1_text: 'שני מגרשי טניס בסמוך להר הרצל — אווירה מקצועית וספורטיבית',
   home_l2_icon: 'pin', home_l2_title: 'גבעת זאב', home_l2_text: 'פעילות טניס לתושבי האזור — קבוצות לילדים ולנוער, מתחילים ומתקדמים',
   home_l3_icon: 'school', home_l3_title: 'בתי ספר בירושלים', home_l3_text: 'תוכניות ניידות עם ציוד מותאם — רשתות, כדורים ומחבטים',
@@ -48,7 +47,7 @@ export default function Home() {
   const g = k => s[k] || DEFAULTS[k] || ''
   const gs = k => Number(g(k)) || Number(DEFAULTS[k]) || 14
 
-  const features = [1,2,3,4].map(i => ({ icon: g(`home_f${i}_icon`), title: g(`home_f${i}_title`), text: g(`home_f${i}_text`) }))
+  const features = [1,2,3].map(i => ({ icon: g(`home_f${i}_icon`), title: g(`home_f${i}_title`), text: g(`home_f${i}_text`) }))
   const locations = [1,2,3,4].map(i => ({ icon: g(`home_l${i}_icon`), title: g(`home_l${i}_title`), text: g(`home_l${i}_text`) }))
 
   return (
