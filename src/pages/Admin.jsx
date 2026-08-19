@@ -115,6 +115,7 @@ export default function Admin() {
 function EnrollmentsTab() {
   const [enrollments, setEnrollments] = useState([])
   const [activities, setActivities] = useState({})
+  const [locations, setLocations] = useState([])
   const [filter, setFilter] = useState('all')
   const [dataLoading, setDataLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
@@ -123,13 +124,14 @@ function EnrollmentsTab() {
 
   async function fetchData() {
     setDataLoading(true)
-    const [enrollRes, actRes] = await Promise.all([
+    const [enrollRes, actRes, locRes] = await Promise.all([
       supabase.from('enrollments').select(`
         id, status, created_at, activity_id, payment_redirect_at,
         player:players(name, birth_year),
         profile:profiles!enrollments_user_id_fkey(full_name, phone)
       `).order('created_at', { ascending: false }),
       supabase.from('activities').select('*'),
+      supabase.from('locations').select('*').order('sort_order'),
     ])
     if (enrollRes.data) setEnrollments(enrollRes.data)
     if (actRes.data) {
@@ -137,6 +139,7 @@ function EnrollmentsTab() {
       actRes.data.forEach(a => { map[a.id] = a })
       setActivities(map)
     }
+    if (locRes.data) setLocations(locRes.data)
     setDataLoading(false)
   }
 
@@ -154,6 +157,36 @@ function EnrollmentsTab() {
     active: enrollments.filter(e => e.status === 'active').length,
     cancelled: enrollments.filter(e => e.status === 'cancelled').length,
   }
+
+  const locationOrder = {}
+  locations.forEach((l, i) => { locationOrder[l.id] = i })
+
+  const activityGroupsMap = {}
+  filtered.forEach(e => {
+    const key = e.activity_id || 'none'
+    if (!activityGroupsMap[key]) activityGroupsMap[key] = []
+    activityGroupsMap[key].push(e)
+  })
+  const activityGroups = Object.entries(activityGroupsMap).map(([activityId, items]) => {
+    const activity = activities[activityId]
+    const location = activity?.location_id ? locations.find(l => l.id === activity.location_id) : null
+    return { activityId, activity, location, items }
+  })
+
+  const locationSectionsMap = {}
+  activityGroups.forEach(g => {
+    const locKey = g.location?.id || 'none'
+    if (!locationSectionsMap[locKey]) locationSectionsMap[locKey] = { location: g.location, groups: [] }
+    locationSectionsMap[locKey].groups.push(g)
+  })
+  const locationSections = Object.values(locationSectionsMap).sort((a, b) => {
+    const oa = a.location ? (locationOrder[a.location.id] ?? 999) : 1000
+    const ob = b.location ? (locationOrder[b.location.id] ?? 999) : 1000
+    return oa - ob
+  })
+  locationSections.forEach(section => {
+    section.groups.sort((a, b) => (a.activity?.name || '').localeCompare(b.activity?.name || '', 'he'))
+  })
 
   if (dataLoading) return <LoadingSpinner />
 
@@ -185,56 +218,77 @@ function EnrollmentsTab() {
       {filtered.length === 0 ? (
         <EmptyState text="אין הרשמות" />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.map(e => {
-            const activity = activities[e.activity_id]
-            const st = STATUS_LABELS[e.status] || STATUS_LABELS.pending
-            const date = new Date(e.created_at).toLocaleDateString('he-IL')
-            return (
-              <div key={e.id} style={{
-                background: '#fff', borderRadius: '16px', padding: '16px 20px',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex',
-                alignItems: 'center', gap: '16px', border: '1px solid #f0f0f0',
-                borderRight: `4px solid ${st.color}`,
+        <div>
+          {locationSections.map(section => (
+            <div key={section.location?.id || 'none'} style={{ marginBottom: '28px' }}>
+              <div style={{
+                fontSize: '13px', fontWeight: '800', color: '#1a472a',
+                marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e8ece8',
               }}>
-                <div style={{ flex: '1.5' }}>
-                  <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{e.player?.name || '—'}</div>
-                  <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {e.player?.birth_year}</div>
-                </div>
-                <div style={{ flex: '1.5' }}>
-                  <div style={{ fontSize: '14px', color: '#333', fontWeight: '500' }}>{e.profile?.full_name || '—'}</div>
-                  <div style={{ fontSize: '12px', color: '#aaa' }}>{e.profile?.phone || ''}</div>
-                </div>
-                <div style={{ flex: '2' }}>
-                  {activity ? (
-                    <>
-                      <div style={{ fontSize: '14px', color: '#333', fontWeight: '600' }}>{activity.name}</div>
-                      <div style={{ fontSize: '12px', color: '#aaa' }}>יום {DAYS_HE[activity.day_of_week]} · {activity.time} · ₪{activity.price}</div>
-                    </>
-                  ) : <span style={{ color: '#ccc' }}>—</span>}
-                </div>
-                <div style={{ fontSize: '12px', color: '#bbb', minWidth: '70px', textAlign: 'center' }}>{date}</div>
-                {e.status === 'pending' && e.payment_redirect_at && (
-                  <span title={`חזר מהתשלום ב-${new Date(e.payment_redirect_at).toLocaleString('he-IL')}`} style={{
-                    fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fffbeb',
-                    border: '1px solid #fde68a', borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
-                  }}>חזר מתשלום ✓</span>
-                )}
-                <StatusPill label={st.label} color={st.color} bg={st.bg} />
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {e.status !== 'active' && (
-                    <ActionBtn label="אשר תשלום" color="#16a34a" onClick={() => updateStatus(e.id, 'active')} disabled={updating === e.id} />
-                  )}
-                  {e.status !== 'cancelled' && (
-                    <ActionBtn label="ביטול" color="#dc2626" outline onClick={() => updateStatus(e.id, 'cancelled')} disabled={updating === e.id} />
-                  )}
-                  {e.status === 'cancelled' && (
-                    <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e.id, 'pending')} disabled={updating === e.id} />
-                  )}
-                </div>
+                📍 {section.location?.name || 'ללא מיקום'}
               </div>
-            )
-          })}
+              {section.groups.map(g => (
+                <div key={g.activityId} style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                    <div>
+                      <span style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{g.activity?.name || 'ללא חוג'}</span>
+                      {g.activity && (
+                        <span style={{ fontSize: '12px', color: '#aaa', marginRight: '8px' }}>
+                          יום {formatDays(g.activity)} · {g.activity.time} · ₪{g.activity.price}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: '12px', fontWeight: '700', color: '#1a472a', background: '#eef5ee',
+                      borderRadius: '20px', padding: '3px 12px', whiteSpace: 'nowrap',
+                    }}>{g.items.length} נרשמים</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {g.items.map(e => {
+                      const st = STATUS_LABELS[e.status] || STATUS_LABELS.pending
+                      const date = new Date(e.created_at).toLocaleDateString('he-IL')
+                      return (
+                        <div key={e.id} style={{
+                          background: '#fff', borderRadius: '16px', padding: '16px 20px',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex',
+                          alignItems: 'center', gap: '16px', border: '1px solid #f0f0f0',
+                          borderRight: `4px solid ${st.color}`,
+                        }}>
+                          <div style={{ flex: '1.5' }}>
+                            <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{e.player?.name || '—'}</div>
+                            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {e.player?.birth_year}</div>
+                          </div>
+                          <div style={{ flex: '1.5' }}>
+                            <div style={{ fontSize: '14px', color: '#333', fontWeight: '500' }}>{e.profile?.full_name || '—'}</div>
+                            <div style={{ fontSize: '12px', color: '#aaa' }}>{e.profile?.phone || ''}</div>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#bbb', minWidth: '70px', textAlign: 'center' }}>{date}</div>
+                          {e.status === 'pending' && e.payment_redirect_at && (
+                            <span title={`חזר מהתשלום ב-${new Date(e.payment_redirect_at).toLocaleString('he-IL')}`} style={{
+                              fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fffbeb',
+                              border: '1px solid #fde68a', borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
+                            }}>חזר מתשלום ✓</span>
+                          )}
+                          <StatusPill label={st.label} color={st.color} bg={st.bg} />
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            {e.status !== 'active' && (
+                              <ActionBtn label="אשר תשלום" color="#16a34a" onClick={() => updateStatus(e.id, 'active')} disabled={updating === e.id} />
+                            )}
+                            {e.status !== 'cancelled' && (
+                              <ActionBtn label="ביטול" color="#dc2626" outline onClick={() => updateStatus(e.id, 'cancelled')} disabled={updating === e.id} />
+                            )}
+                            {e.status === 'cancelled' && (
+                              <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e.id, 'pending')} disabled={updating === e.id} />
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
