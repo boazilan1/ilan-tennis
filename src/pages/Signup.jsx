@@ -71,7 +71,7 @@ export default function Signup() {
           </div>
           <div>
             <label style={labelStyle}>טלפון</label>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} placeholder="050-0000000" />
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required style={inputStyle} placeholder="050-0000000" />
           </div>
           <div>
             <label style={labelStyle}>סיסמה</label>
