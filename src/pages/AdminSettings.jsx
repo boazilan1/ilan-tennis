@@ -12,11 +12,6 @@ const ALL_KEYS = [
   'home_about_title','home_about_text',
   'home_vision_title','home_vision_text','home_vision_belief_title','home_vision_belief_text',
   'home_cta_title','home_cta_title_size','home_cta_subtitle','home_cta_button',
-  'home_locations_title',
-  'home_l1_icon','home_l1_title','home_l1_text',
-  'home_l2_icon','home_l2_title','home_l2_text',
-  'home_l3_icon','home_l3_title','home_l3_text',
-  'home_l4_icon','home_l4_title','home_l4_text',
   'contact_hero_title','contact_hero_title_size','contact_hero_subtitle','contact_hero_subtitle_size',
   'notify_ntfy_topic','notify_email',
   'header_logo_text','header_logo_url','footer_title','footer_subtitle','footer_email',
@@ -356,17 +351,6 @@ export default function AdminSettings() {
             <Field label="כותרת" value={g('home_about_title')} onChange={v => set('home_about_title', v)} />
             <Field label="טקסט (כל שורה = פסקה)" value={g('home_about_text')} onChange={v => set('home_about_text', v)} textarea rows={6} />
             <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = הסקשן לא יוצג בעמוד</div>
-          </Card>
-
-          <Card title="אזור מיקומים">
-            <Field label="כותרת הסקשן" value={g('home_locations_title')} onChange={v => set('home_locations_title', v)} />
-            {[1,2,3,4].map(i => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 2fr', gap: '10px', marginBottom: '14px', paddingBottom: '14px', borderBottom: i < 4 ? '1px solid #f0f0f0' : 'none', alignItems: 'start' }}>
-                <Field label="אייקון" value={g(`home_l${i}_icon`)} onChange={v => set(`home_l${i}_icon`, v)} emoji />
-                <Field label="שם מיקום" value={g(`home_l${i}_title`)} onChange={v => set(`home_l${i}_title`, v)} />
-                <Field label="תיאור" value={g(`home_l${i}_text`)} onChange={v => set(`home_l${i}_text`, v)} textarea />
-              </div>
-            ))}
           </Card>
 
           <Card title="חלק תחתון (CTA)">
