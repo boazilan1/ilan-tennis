@@ -605,18 +605,61 @@ function ActivitiesTab() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(null)
   const [error, setError] = useState('')
+  const [rosterOpenId, setRosterOpenId] = useState(null)
+  const [enrollmentsByActivity, setEnrollmentsByActivity] = useState({})
+  const [allPlayers, setAllPlayers] = useState([])
+  const [rosterSearch, setRosterSearch] = useState('')
+  const [rosterBusy, setRosterBusy] = useState(null)
 
   useEffect(() => { fetchActivities() }, [])
 
   async function fetchActivities() {
     setLoading(true)
-    const [actRes, locRes] = await Promise.all([
+    const [actRes, locRes, enrollRes, playerRes] = await Promise.all([
       supabase.from('activities').select('*').order('sort_order').order('time'),
       supabase.from('locations').select('*').order('sort_order'),
+      supabase.from('enrollments').select('id, activity_id, player:players(id, name, birth_year)').eq('status', 'active'),
+      supabase.from('players').select('id, name, birth_year, user_id').order('name'),
     ])
     if (actRes.data) setActivities(actRes.data)
     if (locRes.data) setLocations(locRes.data)
+    if (enrollRes.data) {
+      const map = {}
+      enrollRes.data.forEach(e => {
+        if (!map[e.activity_id]) map[e.activity_id] = []
+        map[e.activity_id].push(e)
+      })
+      setEnrollmentsByActivity(map)
+    }
+    if (playerRes.data) setAllPlayers(playerRes.data)
     setLoading(false)
+  }
+
+  function toggleRoster(activityId) {
+    setRosterOpenId(prev => prev === activityId ? null : activityId)
+    setRosterSearch('')
+  }
+
+  async function addPlayerToRoster(activityId, playerId) {
+    setRosterBusy(playerId)
+    const player = allPlayers.find(p => p.id === playerId)
+    const { data: existing } = await supabase.from('enrollments').select('id, status').eq('activity_id', activityId).eq('player_id', playerId).maybeSingle()
+    if (existing) {
+      if (existing.status !== 'active') await supabase.from('enrollments').update({ status: 'active' }).eq('id', existing.id)
+    } else {
+      await supabase.from('enrollments').insert({ activity_id: activityId, player_id: playerId, user_id: player?.user_id || null, status: 'active' })
+    }
+    const { data } = await supabase.from('enrollments').select('id, activity_id, player:players(id, name, birth_year)').eq('activity_id', activityId).eq('status', 'active')
+    if (data) setEnrollmentsByActivity(prev => ({ ...prev, [activityId]: data }))
+    setRosterBusy(null)
+  }
+
+  async function removeFromRoster(activityId, enrollment) {
+    if (!window.confirm(`להוציא את ${enrollment.player?.name} מהחוג?`)) return
+    setRosterBusy(enrollment.id)
+    await supabase.from('enrollments').delete().eq('id', enrollment.id)
+    setEnrollmentsByActivity(prev => ({ ...prev, [activityId]: (prev[activityId] || []).filter(e => e.id !== enrollment.id) }))
+    setRosterBusy(null)
   }
 
   function toggleDay(day) {
@@ -734,32 +777,86 @@ function ActivitiesTab() {
         <EmptyState text='אין חוגים עדיין — לחץ "+ חוג חדש" להתחיל' />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {activities.map(a => (
-            <div key={a.id} style={{ background: '#fff', borderRadius: '16px', padding: '18px 22px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '16px', border: '1px solid #f0f0f0', borderRight: '4px solid #1a472a' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: '700', fontSize: '16px', color: '#111' }}>{a.name}</div>
-                {a.description && <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{a.description}</div>}
-              </div>
-              <div style={{ fontSize: '13px', color: '#555', minWidth: '180px' }}>
-                <div style={{ fontWeight: '500' }}>📅 {formatDays(a)} · 🕐 {a.time}{a.age_group ? ` · 🎯 ${a.age_group}` : ''}</div>
-                <div style={{ marginTop: '3px', color: '#888' }}>
-                  💰 ₪{a.price} לחודש{a.max_students ? ` · 👥 עד ${a.max_students}` : ''}
-                  {a.location_id && locations.find(l => l.id === a.location_id) ? ` · 📍 ${locations.find(l => l.id === a.location_id).name}` : ''}
+          {activities.map(a => {
+            const roster = enrollmentsByActivity[a.id] || []
+            const rosterOpen = rosterOpenId === a.id
+            const enrolledIds = new Set(roster.map(e => e.player?.id))
+            const addable = allPlayers.filter(p => !enrolledIds.has(p.id) && (!rosterSearch || p.name.includes(rosterSearch)))
+            return (
+              <div key={a.id} style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', borderRight: '4px solid #1a472a', overflow: 'hidden' }}>
+                <div style={{ padding: '18px 22px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '700', fontSize: '16px', color: '#111' }}>{a.name}</div>
+                    {a.description && <div style={{ fontSize: '13px', color: '#888', marginTop: '2px' }}>{a.description}</div>}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#555', minWidth: '180px' }}>
+                    <div style={{ fontWeight: '500' }}>📅 {formatDays(a)} · 🕐 {a.time}{a.age_group ? ` · 🎯 ${a.age_group}` : ''}</div>
+                    <div style={{ marginTop: '3px', color: '#888' }}>
+                      💰 ₪{a.price} לחודש{a.max_students ? ` · 👥 עד ${a.max_students}` : ''}
+                      {a.location_id && locations.find(l => l.id === a.location_id) ? ` · 📍 ${locations.find(l => l.id === a.location_id).name}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: a.payment_link ? '#16a34a' : '#ccc' }}>
+                    {a.payment_link ? '🔗 קישור תשלום' : '🔗 ללא קישור'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <button onClick={() => moveActivity(a.id, -1)} disabled={activities.indexOf(a) === 0} style={{ background: '#f5f5f5', border: 'none', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', opacity: activities.indexOf(a) === 0 ? 0.3 : 1 }}>▲</button>
+                    <button onClick={() => moveActivity(a.id, 1)} disabled={activities.indexOf(a) === activities.length - 1} style={{ background: '#f5f5f5', border: 'none', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', opacity: activities.indexOf(a) === activities.length - 1 ? 0.3 : 1 }}>▼</button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={() => toggleRoster(a.id)} style={{
+                      ...outlineBtn, color: rosterOpen ? '#fff' : '#1a472a', borderColor: '#1a472a',
+                      background: rosterOpen ? '#1a472a' : '#fff', fontWeight: '700',
+                    }}>👥 מי רשום ({roster.length})</button>
+                    <button onClick={() => openEdit(a)} style={outlineBtn}>עריכה</button>
+                    <button onClick={() => handleDelete(a)} disabled={deleting === a.id} style={{ ...outlineBtn, color: '#dc2626', borderColor: '#dc2626', opacity: deleting === a.id ? 0.5 : 1 }}>מחיקה</button>
+                  </div>
                 </div>
+
+                {rosterOpen && (
+                  <div style={{ borderTop: '1px solid #f0f0f0', background: '#f9fdf9', padding: '18px 22px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a472a', marginBottom: '10px' }}>רשומים לחוג</div>
+                    {roster.length === 0 ? (
+                      <p style={{ color: '#bbb', fontSize: '13px', margin: '0 0 14px' }}>אין תלמידים רשומים</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                        {roster.map(e => (
+                          <div key={e.id} style={{
+                            display: 'flex', alignItems: 'center', gap: '8px', background: '#fff',
+                            border: '1px solid #ddd', borderRadius: '20px', padding: '6px 8px 6px 14px', fontSize: '13px',
+                          }}>
+                            <span style={{ fontWeight: '600', color: '#333' }}>{e.player?.name}</span>
+                            <button onClick={() => removeFromRoster(a.id, e)} disabled={rosterBusy === e.id} style={{
+                              background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: '50%',
+                              width: '22px', height: '22px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
+                              opacity: rosterBusy === e.id ? 0.5 : 1,
+                            }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף מתאמן</div>
+                    <input value={rosterSearch} onChange={e => setRosterSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} />
+                    <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {addable.map(p => (
+                        <button key={p.id} onClick={() => addPlayerToRoster(a.id, p.id)} disabled={rosterBusy === p.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f7f0', border: '1px solid #c5ddc5',
+                          borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                          color: '#1a472a', fontWeight: '600', fontSize: '14px', opacity: rosterBusy === p.id ? 0.6 : 1,
+                        }}>
+                          <span>+</span>
+                          <span>{p.name}</span>
+                        </button>
+                      ))}
+                      {addable.length === 0 && (
+                        <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כל המתאמנים כבר רשומים</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: '12px', fontWeight: '600', color: a.payment_link ? '#16a34a' : '#ccc' }}>
-                {a.payment_link ? '🔗 קישור תשלום' : '🔗 ללא קישור'}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <button onClick={() => moveActivity(a.id, -1)} disabled={activities.indexOf(a) === 0} style={{ background: '#f5f5f5', border: 'none', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', opacity: activities.indexOf(a) === 0 ? 0.3 : 1 }}>▲</button>
-                <button onClick={() => moveActivity(a.id, 1)} disabled={activities.indexOf(a) === activities.length - 1} style={{ background: '#f5f5f5', border: 'none', borderRadius: '5px', padding: '3px 8px', cursor: 'pointer', fontSize: '11px', opacity: activities.indexOf(a) === activities.length - 1 ? 0.3 : 1 }}>▼</button>
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => openEdit(a)} style={outlineBtn}>עריכה</button>
-                <button onClick={() => handleDelete(a)} disabled={deleting === a.id} style={{ ...outlineBtn, color: '#dc2626', borderColor: '#dc2626', opacity: deleting === a.id ? 0.5 : 1 }}>מחיקה</button>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
