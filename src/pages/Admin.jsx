@@ -150,6 +150,14 @@ function EnrollmentsTab() {
     setUpdating(null)
   }
 
+  async function deleteEnrollment(id, playerName) {
+    if (!window.confirm(`למחוק לצמיתות את ההרשמה של ${playerName || 'התלמיד'}?`)) return
+    setUpdating(id)
+    await supabase.from('enrollments').delete().eq('id', id)
+    setEnrollments(prev => prev.filter(e => e.id !== id))
+    setUpdating(null)
+  }
+
   const filtered = filter === 'all' ? enrollments : enrollments.filter(e => e.status === filter)
   const counts = {
     all: enrollments.length,
@@ -280,6 +288,7 @@ function EnrollmentsTab() {
                             {e.status === 'cancelled' && (
                               <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e.id, 'pending')} disabled={updating === e.id} />
                             )}
+                            <ActionBtn label="מחק" color="#dc2626" outline onClick={() => deleteEnrollment(e.id, e.player?.name)} disabled={updating === e.id} />
                           </div>
                         </div>
                       )
