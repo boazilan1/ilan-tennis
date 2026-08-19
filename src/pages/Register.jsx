@@ -25,7 +25,7 @@ function formatDays(a) {
 export default function Register() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user, loading: authLoading } = useAuth()
+  const { user, profile, loading: authLoading } = useAuth()
 
   const activityId = searchParams.get('activity')
 
@@ -150,6 +150,29 @@ export default function Register() {
         }
         setSubmitting(false)
         return
+      }
+
+      const playerName = (showNewPlayer || players.length === 0)
+        ? newName.trim()
+        : (players.find(p => p.id === playerId)?.name || '')
+
+      try {
+        await fetch('/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'new_registration',
+            registrantEmail: user.email,
+            registrantName: profile?.full_name || '',
+            playerName,
+            activityName: activity.name,
+            activityDay: formatDays(activity),
+            activityTime: activity.time,
+            price: activity.price,
+          }),
+        })
+      } catch (notifyErr) {
+        console.error('notify email failed', notifyErr)
       }
 
       // מעבר לתשלום

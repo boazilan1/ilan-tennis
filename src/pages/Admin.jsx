@@ -128,7 +128,7 @@ function EnrollmentsTab() {
       supabase.from('enrollments').select(`
         id, status, created_at, activity_id, payment_redirect_at,
         player:players(name, birth_year),
-        profile:profiles!enrollments_user_id_fkey(full_name, phone)
+        profile:profiles!enrollments_user_id_fkey(full_name, phone, email)
       `).order('created_at', { ascending: false }),
       supabase.from('activities').select('*'),
       supabase.from('locations').select('*').order('sort_order'),
@@ -143,11 +143,25 @@ function EnrollmentsTab() {
     setDataLoading(false)
   }
 
-  async function updateStatus(id, newStatus) {
+  async function updateStatus(enrollment, activity, newStatus) {
+    const id = enrollment.id
     setUpdating(id)
     await supabase.from('enrollments').update({ status: newStatus }).eq('id', id)
     setEnrollments(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e))
     setUpdating(null)
+
+    if (newStatus === 'active' && enrollment.profile?.email) {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'payment_confirmed',
+          registrantEmail: enrollment.profile.email,
+          playerName: enrollment.player?.name || '',
+          activityName: activity?.name || '',
+        }),
+      }).catch(err => console.error('notify email failed', err))
+    }
   }
 
   async function deleteEnrollment(id, playerName) {
@@ -280,13 +294,13 @@ function EnrollmentsTab() {
                           <StatusPill label={st.label} color={st.color} bg={st.bg} />
                           <div style={{ display: 'flex', gap: '6px' }}>
                             {e.status !== 'active' && (
-                              <ActionBtn label="אשר תשלום" color="#16a34a" onClick={() => updateStatus(e.id, 'active')} disabled={updating === e.id} />
+                              <ActionBtn label="אשר תשלום" color="#16a34a" onClick={() => updateStatus(e, g.activity, 'active')} disabled={updating === e.id} />
                             )}
                             {e.status !== 'cancelled' && (
-                              <ActionBtn label="ביטול" color="#dc2626" outline onClick={() => updateStatus(e.id, 'cancelled')} disabled={updating === e.id} />
+                              <ActionBtn label="ביטול" color="#dc2626" outline onClick={() => updateStatus(e, g.activity, 'cancelled')} disabled={updating === e.id} />
                             )}
                             {e.status === 'cancelled' && (
-                              <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e.id, 'pending')} disabled={updating === e.id} />
+                              <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e, g.activity, 'pending')} disabled={updating === e.id} />
                             )}
                             <ActionBtn label="מחק" color="#dc2626" outline onClick={() => deleteEnrollment(e.id, e.player?.name)} disabled={updating === e.id} />
                           </div>
