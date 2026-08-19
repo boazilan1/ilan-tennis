@@ -90,11 +90,17 @@ export default async function handler(req, res) {
     return
   }
 
-  try {
-    await Promise.all(messages.map(msg => sendEmail(apiKey, msg)))
-    res.status(200).json({ ok: true })
-  } catch (err) {
-    console.error('notify email error', err)
+  const results = await Promise.allSettled(messages.map(msg => sendEmail(apiKey, msg)))
+  results.forEach((result, i) => {
+    if (result.status === 'rejected') {
+      console.error(`notify email error (to: ${messages[i].to})`, result.reason)
+    }
+  })
+
+  if (results.every(r => r.status === 'rejected')) {
     res.status(502).json({ error: 'Failed to send email' })
+    return
   }
+
+  res.status(200).json({ ok: true, failed: results.filter(r => r.status === 'rejected').length })
 }
