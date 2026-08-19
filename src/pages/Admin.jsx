@@ -337,6 +337,7 @@ function overallStatus(enrollments) {
 function TraineesTab() {
   const { user } = useAuth()
   const [players, setPlayers] = useState([])
+  const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -351,15 +352,20 @@ function TraineesTab() {
 
   async function fetchPlayers() {
     setLoading(true)
-    const [playerRes, profileRes] = await Promise.all([
-      supabase.from('players').select('id, name, birth_year, notes, user_id, enrollments(status, activity:activities(name))').order('name'),
+    const [playerRes, profileRes, locRes] = await Promise.all([
+      supabase.from('players').select(`
+        id, name, birth_year, notes, user_id,
+        enrollments(status, activity:activities(id, name, location_id, days_of_week, day_of_week, time, price))
+      `).order('name'),
       supabase.from('profiles').select('id, full_name, phone'),
+      supabase.from('locations').select('*').order('sort_order'),
     ])
     if (playerRes.data && profileRes.data) {
       const profileMap = {}
       profileRes.data.forEach(p => { profileMap[p.id] = p })
       setPlayers(playerRes.data.map(p => ({ ...p, profile: profileMap[p.user_id] || null })))
     }
+    if (locRes.data) setLocations(locRes.data)
     setLoading(false)
   }
 
@@ -397,11 +403,9 @@ function TraineesTab() {
     setEditingId(null)
   }
 
-  const filtered = players.filter(p => {
-    const matchSearch = !search || p.name.includes(search) || p.profile?.full_name?.includes(search) || p.profile?.phone?.includes(search)
-    const st = overallStatus(p.enrollments)
-    return matchSearch && (filterStatus === 'all' || st === filterStatus)
-  })
+  function matchesSearch(p) {
+    return !search || p.name.includes(search) || p.profile?.full_name?.includes(search) || p.profile?.phone?.includes(search)
+  }
 
   const counts = {
     all: players.length,
@@ -410,6 +414,46 @@ function TraineesTab() {
     cancelled: players.filter(p => overallStatus(p.enrollments) === 'cancelled').length,
     none: players.filter(p => overallStatus(p.enrollments) === 'none').length,
   }
+
+  const entries = []
+  players.filter(matchesSearch).forEach(p => {
+    const relevant = (p.enrollments || []).filter(e => filterStatus === 'all' || e.status === filterStatus)
+    if (relevant.length > 0) {
+      relevant.forEach(e => entries.push({ player: p, enrollment: e }))
+    } else if ((filterStatus === 'all' || filterStatus === 'none') && (!p.enrollments || p.enrollments.length === 0)) {
+      entries.push({ player: p, enrollment: null })
+    }
+  })
+
+  const locationOrder = {}
+  locations.forEach((l, i) => { locationOrder[l.id] = i })
+
+  const activityGroupsMap = {}
+  entries.forEach(entry => {
+    const key = entry.enrollment?.activity?.id || 'none'
+    if (!activityGroupsMap[key]) activityGroupsMap[key] = []
+    activityGroupsMap[key].push(entry)
+  })
+  const activityGroups = Object.entries(activityGroupsMap).map(([activityId, items]) => {
+    const activity = items[0].enrollment?.activity || null
+    const location = activity?.location_id ? locations.find(l => l.id === activity.location_id) : null
+    return { activityId, activity, location, items }
+  })
+
+  const locationSectionsMap = {}
+  activityGroups.forEach(g => {
+    const locKey = g.location?.id || 'none'
+    if (!locationSectionsMap[locKey]) locationSectionsMap[locKey] = { location: g.location, groups: [] }
+    locationSectionsMap[locKey].groups.push(g)
+  })
+  const locationSections = Object.values(locationSectionsMap).sort((a, b) => {
+    const oa = a.location ? (locationOrder[a.location.id] ?? 999) : 1000
+    const ob = b.location ? (locationOrder[b.location.id] ?? 999) : 1000
+    return oa - ob
+  })
+  locationSections.forEach(section => {
+    section.groups.sort((a, b) => (a.activity?.name || '').localeCompare(b.activity?.name || '', 'he'))
+  })
 
   if (loading) return <LoadingSpinner />
 
@@ -472,50 +516,72 @@ function TraineesTab() {
           style={{ ...inputStyle, paddingRight: '38px' }} />
       </div>
 
-      {filtered.length === 0 ? <EmptyState text="לא נמצאו מתאמנים" /> : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.map(p => {
-            const st = overallStatus(p.enrollments)
-            const stInfo = STATUS_TRAINEE[st]
-            const activeEnroll = p.enrollments?.filter(e => e.status === 'active') || []
-            const pendingEnroll = p.enrollments?.filter(e => e.status === 'pending') || []
-            return (
-              <div key={p.id} style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', borderRight: `4px solid ${stInfo.color}`, overflow: 'hidden' }}>
-                {editingId !== p.id ? (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 2fr auto auto', alignItems: 'center', gap: '12px', padding: '16px 20px' }}>
-                    <div>
-                      <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{p.name}</div>
-                      <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {p.birth_year}</div>
-                      {p.notes && <div style={{ fontSize: '11px', color: '#bbb', marginTop: '3px' }}>📝 {p.notes}</div>}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '14px', color: '#444', fontWeight: '500' }}>{p.profile?.full_name || '—'}</div>
-                      <div style={{ fontSize: '12px', color: '#aaa' }}>{p.profile?.phone || ''}</div>
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {activeEnroll.map((e, i) => <span key={i} style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '6px', padding: '2px 8px', fontSize: '11px', fontWeight: '600' }}>{e.activity?.name}</span>)}
-                      {pendingEnroll.map((e, i) => <span key={i} style={{ background: '#fef3c7', color: '#d97706', borderRadius: '6px', padding: '2px 8px', fontSize: '11px' }}>{e.activity?.name} ⏳</span>)}
-                      {p.enrollments?.length === 0 && <span style={{ color: '#ccc', fontSize: '12px' }}>אין חוגים</span>}
-                    </div>
-                    <StatusPill label={stInfo.label} color={stInfo.color} bg={stInfo.bg} />
-                    <button onClick={() => startEdit(p)} style={outlineBtn}>עריכה</button>
-                  </div>
-                ) : (
-                  <div style={{ padding: '16px 20px', background: '#f9fdf9' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
-                      <div><label style={labelStyle}>שם מלא</label><input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} /></div>
-                      <div><label style={labelStyle}>שנת לידה</label><input type="number" value={editForm.birth_year} onChange={e => setEditForm(f => ({ ...f, birth_year: e.target.value }))} style={inputStyle} /></div>
-                      <div><label style={labelStyle}>הערות</label><input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} /></div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                      <button onClick={() => setEditingId(null)} style={outlineBtn}>ביטול</button>
-                      <button onClick={() => saveEdit(p.id)} style={primaryBtn}>שמור</button>
-                    </div>
-                  </div>
-                )}
+      {entries.length === 0 ? <EmptyState text="לא נמצאו מתאמנים" /> : (
+        <div>
+          {locationSections.map(section => (
+            <div key={section.location?.id || 'none'} style={{ marginBottom: '28px' }}>
+              <div style={{
+                fontSize: '13px', fontWeight: '800', color: '#1a472a',
+                marginBottom: '12px', paddingBottom: '8px', borderBottom: '2px solid #e8ece8',
+              }}>
+                📍 {section.location?.name || 'ללא מיקום'}
               </div>
-            )
-          })}
+              {section.groups.map(g => (
+                <div key={g.activityId} style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                    <div>
+                      <span style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{g.activity?.name || 'ללא חוג'}</span>
+                      {g.activity && (
+                        <span style={{ fontSize: '12px', color: '#aaa', marginRight: '8px' }}>
+                          יום {formatDays(g.activity)} · {g.activity.time} · ₪{g.activity.price}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{
+                      fontSize: '12px', fontWeight: '700', color: '#1a472a', background: '#eef5ee',
+                      borderRadius: '20px', padding: '3px 12px', whiteSpace: 'nowrap',
+                    }}>{g.items.length} מתאמנים</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {g.items.map(({ player: p, enrollment }) => {
+                      const stInfo = STATUS_TRAINEE[enrollment?.status || 'none']
+                      return (
+                        <div key={`${p.id}-${enrollment?.activity?.id || 'none'}`} style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', borderRight: `4px solid ${stInfo.color}`, overflow: 'hidden' }}>
+                          {editingId !== p.id ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr auto auto', alignItems: 'center', gap: '12px', padding: '16px 20px' }}>
+                              <div>
+                                <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{p.name}</div>
+                                <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {p.birth_year}</div>
+                                {p.notes && <div style={{ fontSize: '11px', color: '#bbb', marginTop: '3px' }}>📝 {p.notes}</div>}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '14px', color: '#444', fontWeight: '500' }}>{p.profile?.full_name || '—'}</div>
+                                <div style={{ fontSize: '12px', color: '#aaa' }}>{p.profile?.phone || ''}</div>
+                              </div>
+                              <StatusPill label={stInfo.label} color={stInfo.color} bg={stInfo.bg} />
+                              <button onClick={() => startEdit(p)} style={outlineBtn}>עריכה</button>
+                            </div>
+                          ) : (
+                            <div style={{ padding: '16px 20px', background: '#f9fdf9' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                <div><label style={labelStyle}>שם מלא</label><input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} /></div>
+                                <div><label style={labelStyle}>שנת לידה</label><input type="number" value={editForm.birth_year} onChange={e => setEditForm(f => ({ ...f, birth_year: e.target.value }))} style={inputStyle} /></div>
+                                <div><label style={labelStyle}>הערות</label><input value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} /></div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                                <button onClick={() => setEditingId(null)} style={outlineBtn}>ביטול</button>
+                                <button onClick={() => saveEdit(p.id)} style={primaryBtn}>שמור</button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       )}
     </div>
