@@ -96,11 +96,6 @@ export default function Register() {
       return
     }
 
-    if (!signatureName.trim()) {
-      setError('יש להזין שם מלא לחתימה')
-      return
-    }
-
     if (!signatureData) {
       setError('יש לחתום בעזרת האצבע או העכבר')
       return
@@ -394,7 +389,7 @@ export default function Register() {
 
         <div>
           <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>
-            חתימה — שם מלא <span style={{ color: '#c00' }}>*</span>
+            שם מלא לחתימה (רשות)
           </label>
           <input
             type="text"
@@ -403,8 +398,11 @@ export default function Register() {
             placeholder="הקלד/י את שמך המלא"
             style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '15px', boxSizing: 'border-box', marginBottom: '10px' }}
           />
+          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>
+            חתימה <span style={{ color: '#c00' }}>*</span>
+          </label>
           <SignaturePad onChange={setSignatureData} />
-          <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>השם והחתימה מהווים אישור דיגיטלי להרשמה ולתנאיה</div>
+          <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>החתימה מהווה אישור דיגיטלי להרשמה ולתנאיה</div>
         </div>
 
         {error && (
@@ -415,7 +413,7 @@ export default function Register() {
 
         <button
           type="submit"
-          disabled={submitting || !termsAccepted || !signatureName.trim() || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
+          disabled={submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
           style={{
             background: '#1a472a',
             color: '#fff',
@@ -425,7 +423,7 @@ export default function Register() {
             fontSize: '16px',
             fontWeight: 'bold',
             cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: (submitting || !termsAccepted || !signatureName.trim() || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
+            opacity: (submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
           }}
         >
           {submitting ? 'רושם...' : 'אישור הרשמה'}
