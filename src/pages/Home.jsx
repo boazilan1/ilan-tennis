@@ -12,15 +12,16 @@ const DEFAULTS = {
   home_cta_subtitle: 'הצטרפו אלינו — בחרו חוג והירשמו עוד היום',
   home_cta_button: 'לכל הפעילויות',
   home_locations_title: 'היכן אנחנו פועלים',
-  home_f1_icon: 'trophy', home_f1_title: 'אימון מקצועי', home_f1_text: 'תוכניות אימון מותאמות אישית לכל שחקן, מתחילים ועד מתקדמים',
-  home_f2_icon: 'users', home_f2_title: 'לכל הגילאים', home_f2_text: 'ילדים, נוער ומבוגרים — קבוצות לפי גיל ורמה',
-  home_f3_icon: 'pin', home_f3_title: 'מספר מיקומים', home_f3_text: 'פעילות בציפורי, גבעת זאב, נוקדים ובתי ספר באזור ירושלים',
   home_l1_icon: 'ball', home_l1_title: 'ציפורי', home_l1_text: 'שני מגרשי טניס בסמוך להר הרצל — אווירה מקצועית וספורטיבית',
   home_l2_icon: 'pin', home_l2_title: 'גבעת זאב', home_l2_text: 'פעילות טניס לתושבי האזור — קבוצות לילדים ולנוער, מתחילים ומתקדמים',
   home_l3_icon: 'school', home_l3_title: 'בתי ספר בירושלים', home_l3_text: 'תוכניות ניידות עם ציוד מותאם — רשתות, כדורים ומחבטים',
   home_l4_icon: 'tent', home_l4_title: 'מחנות ותחרויות', home_l4_text: 'מחנות אימון עצימים ותחרויות לשחקנים בכל הרמות',
   home_hero_image_url: '', home_hero_image_pos_x: '50', home_hero_image_pos_y: '50', home_hero_height: '420',
   home_about_title: 'קצת עלינו', home_about_text: '',
+  home_vision_title: 'אילן טניס',
+  home_vision_text: 'אילן טניס הוקם בשנת 2023 מתוך רצון ליצור פעילות טניס מקצועית, איכותית ומהנה, שמחברת בין משחק, תנועה, התפתחות אישית וקהילה.\nמאז הקמתו פעל אילן טניס ביישובים ובמסגרות שונות, ביניהם אפרת, מרכז ציפורי וגבעת זאב, וכן בבתי ספר ובמסגרות חינוכיות, בהם בית הספר הניסויי, בית הספר השלום ובית הספר באבו גוש.\nאנחנו מאמינים שטניס הוא הרבה מעבר ללימוד של משחק. הוא שילוב של משחק, תנועה ואתגר, שמאפשר לילדים ולבני נוער ליהנות, להתפתח, לפתח ביטחון עצמי, להתמודד עם אתגרים ולצמוח מהם.\nלצד ההנאה והחוויה החברתית, אנחנו מאמינים שחשוב לפגוש גם אתגר ותחרות כחלק מהדרך. במהלך האימונים והפעילות במגרש ניצור הזדמנויות להתמודד, להתחרות, להשתפר ולגלות את היכולת האישית של כל אחד.\nמי שירצה לקחת את הטניס צעד נוסף קדימה, יוכל בהמשך להשתתף גם בתחרויות וטורנירים מחוץ למסגרת. ובמקביל, גם מי שבוחר שלא להתחרות בחוץ יוכל למצוא בתוך הפעילות אתגר, משחק תחרותי והזדמנויות להתקדם ולהשתפר.',
+  home_vision_belief_title: 'במה אנחנו מאמינים?',
+  home_vision_belief_text: 'אנחנו מאמינים שמשחק ותנועה הם דרך להשתחרר, ליהנות, לפגוש אתגרים, לצמוח מהם ולהתחזק — ביחד, על המגרש ומחוצה לו.',
 }
 
 const ICON_NAMES = new Set(['ball', 'trophy', 'users', 'pin', 'cap', 'school', 'tent', 'calendar', 'clock', 'tag', 'mail', 'check'])
@@ -56,7 +57,6 @@ export default function Home() {
   const g = k => s[k] || DEFAULTS[k] || ''
   const gs = k => Number(g(k)) || Number(DEFAULTS[k]) || 14
 
-  const features = [1,2,3].map(i => ({ icon: g(`home_f${i}_icon`), title: g(`home_f${i}_title`), text: g(`home_f${i}_text`) }))
   const locations = [1,2,3,4].map(i => ({ icon: g(`home_l${i}_icon`), title: g(`home_l${i}_title`), text: g(`home_l${i}_text`) }))
 
   return (
@@ -90,21 +90,32 @@ export default function Home() {
         <SectionCurve fill="#f5f5f5" />
       </section>
 
-      {/* Feature cards */}
-      <section style={{ maxWidth: '960px', margin: '60px auto', padding: '0 20px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-          {features.map((f, i) => (
-            <div key={i} style={{ background: 'white', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0' }}>
-              <div style={{
-                width: '64px', height: '64px', borderRadius: '50%', background: 'var(--sand-light)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 14px',
-              }}><FeatureIcon value={f.icon} size={28} color="#1a472a" /></div>
-              <h3 style={{ margin: '0 0 8px', color: '#1a472a', fontSize: '16px', fontWeight: '700' }}>{f.title}</h3>
-              <p style={{ margin: 0, color: '#666', fontSize: '13px', lineHeight: 1.6 }}>{f.text}</p>
-            </div>
-          ))}
+      {/* Vision */}
+      <section style={{ maxWidth: '760px', margin: '60px auto 0', padding: '0 20px' }}>
+        <div style={{ background: 'white', borderRadius: '18px', padding: '36px 32px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
+          {g('home_vision_title') && (
+            <h2 style={{ color: '#1a472a', fontSize: '24px', fontWeight: '800', margin: '0 0 18px' }}>{g('home_vision_title')}</h2>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {g('home_vision_text').split('\n').filter(Boolean).map((p, i) => (
+              <p key={i} style={{ margin: 0, fontSize: '15px', color: '#444', lineHeight: 1.8, paddingRight: '14px', borderRight: '3px solid var(--sand)' }}>{p}</p>
+            ))}
+          </div>
         </div>
+
+        {g('home_vision_belief_text') && (
+          <div style={{
+            marginTop: '20px', background: 'var(--sand-light)', border: '1px solid var(--sand)',
+            borderRadius: '18px', padding: '32px 28px', textAlign: 'center',
+          }}>
+            {g('home_vision_belief_title') && (
+              <h3 style={{ color: '#1a472a', fontSize: '15px', fontWeight: '800', margin: '0 0 12px', letterSpacing: '0.3px' }}>{g('home_vision_belief_title')}</h3>
+            )}
+            <p style={{ margin: 0, color: '#1a472a', fontSize: '19px', fontWeight: '700', lineHeight: 1.6, maxWidth: '560px', marginInline: 'auto' }}>
+              {g('home_vision_belief_text')}
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Locations */}
