@@ -24,13 +24,12 @@ function formatDays(a) {
 export default function Register() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   const activityId = searchParams.get('activity')
 
   const [allActivities, setAllActivities] = useState([])
   const [locations, setLocations] = useState([])
-  const [locationFilter, setLocationFilter] = useState('all')
   const [activity, setActivity] = useState(null)
   const [players, setPlayers] = useState([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
@@ -44,6 +43,7 @@ export default function Register() {
   const [success] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsText, setTermsText] = useState(DEFAULT_TERMS)
+  const [signatureName, setSignatureName] = useState('')
 
   useEffect(() => {
     supabase.from('site_settings').select('value').eq('key', 'register_terms_text').maybeSingle()
@@ -51,6 +51,7 @@ export default function Register() {
   }, [])
 
   useEffect(() => {
+    if (authLoading) return
     if (!user) {
       navigate('/login')
       return
@@ -76,7 +77,7 @@ export default function Register() {
       setLoading(false)
     }
     fetchData()
-  }, [user, activityId, navigate])
+  }, [user, authLoading, activityId, navigate])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -84,6 +85,11 @@ export default function Register() {
 
     if (!termsAccepted) {
       setError('יש לאשר את תנאי ההרשמה כדי להמשיך')
+      return
+    }
+
+    if (!signatureName.trim()) {
+      setError('יש להזין שם מלא לחתימה')
       return
     }
 
@@ -125,7 +131,7 @@ export default function Register() {
 
       const { error: enrollError } = await supabase
         .from('enrollments')
-        .insert({ user_id: user.id, player_id: playerId, activity_id: activityId, status: 'pending', terms_accepted_at: new Date().toISOString() })
+        .insert({ user_id: user.id, player_id: playerId, activity_id: activityId, status: 'pending', terms_accepted_at: new Date().toISOString(), signature_name: signatureName.trim() })
 
       if (enrollError) {
         if (enrollError.code === '23505') {
@@ -157,56 +163,46 @@ export default function Register() {
   }
 
   if (!activityId) {
-    const filteredActivities = locationFilter === 'all' ? allActivities : allActivities.filter(a => a.location_id === locationFilter)
+    const groups = locations.map(l => ({ location: l, items: allActivities.filter(a => a.location_id === l.id) })).filter(g => g.items.length > 0)
+    const unassigned = allActivities.filter(a => !locations.some(l => l.id === a.location_id))
+    if (unassigned.length > 0) groups.push({ location: null, items: unassigned })
+
     return (
       <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3', padding: '40px 20px' }}>
         <div style={{ maxWidth: '560px', margin: '0 auto' }}>
           <h1 style={{ color: '#1a472a', fontSize: '24px', fontWeight: '800', marginBottom: '6px' }}>הרשמה לחוג</h1>
-          <p style={{ color: '#888', marginBottom: '20px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
+          <p style={{ color: '#888', marginBottom: '28px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
 
-          {locations.length > 0 && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '24px' }}>
-              <button onClick={() => setLocationFilter('all')} style={{
-                background: locationFilter === 'all' ? '#1a472a' : '#fff', color: locationFilter === 'all' ? '#fff' : '#555',
-                border: `1px solid ${locationFilter === 'all' ? '#1a472a' : '#ddd'}`, borderRadius: '20px',
-                padding: '7px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: locationFilter === 'all' ? '700' : '400',
-              }}>הכל</button>
-              {locations.map(l => (
-                <button key={l.id} onClick={() => setLocationFilter(l.id)} style={{
-                  background: locationFilter === l.id ? '#1a472a' : '#fff', color: locationFilter === l.id ? '#fff' : '#555',
-                  border: `1px solid ${locationFilter === l.id ? '#1a472a' : '#ddd'}`, borderRadius: '20px',
-                  padding: '7px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: locationFilter === l.id ? '700' : '400',
-                }}>{l.name}</button>
+          {groups.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+              {groups.map((group, gi) => (
+                <div key={group.location?.id || 'other'}>
+                  <h2 style={{ color: '#1a472a', fontSize: '17px', fontWeight: '800', marginBottom: '10px' }}>
+                    {group.location?.name || 'כללי'}
+                  </h2>
+                  <div style={{ background: 'white', borderRadius: '4px', boxShadow: '0 2px 20px rgba(0,0,0,0.06)', overflow: 'hidden', padding: '10px 24px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                      <tbody>
+                        {group.items.map((a, i) => (
+                          <tr key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
+                            cursor: 'pointer', borderBottom: i < group.items.length - 1 ? '1px solid #eee' : 'none',
+                          }}>
+                            <td style={{ padding: '14px 0', color: '#1a472a', fontWeight: '600' }}>{a.name}</td>
+                            <td style={{ padding: '14px 0', color: '#555' }}>{formatDays(a)}</td>
+                            <td style={{ padding: '14px 0', color: '#555' }}>{a.time}</td>
+                            <td style={{ padding: '14px 0', color: '#888' }}>{a.age_group}</td>
+                            <td style={{ padding: '14px 0', color: '#888', textAlign: 'left' }}>{a.price ? `₪${a.price}` : ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               ))}
             </div>
+          ) : (
+            <p style={{ color: '#bbb', textAlign: 'center', padding: '24px 0' }}>אין חוגים זמינים כרגע</p>
           )}
-
-          <div style={{ background: 'white', borderRadius: '4px', boxShadow: '0 2px 20px rgba(0,0,0,0.06)', overflow: 'hidden', padding: '10px 24px' }}>
-            {filteredActivities.length > 0 ? (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                <tbody>
-                  {filteredActivities.map((a, i) => (
-                    <tr key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
-                      cursor: 'pointer', borderBottom: i < filteredActivities.length - 1 ? '1px solid #eee' : 'none',
-                    }}>
-                      <td style={{ padding: '14px 0' }}>
-                        <div style={{ color: '#1a472a', fontWeight: '600' }}>{a.name}</div>
-                        {a.location_id && locations.find(l => l.id === a.location_id) && (
-                          <div style={{ color: '#aaa', fontSize: '12px', marginTop: '2px' }}>{locations.find(l => l.id === a.location_id).name}</div>
-                        )}
-                      </td>
-                      <td style={{ padding: '14px 0', color: '#555' }}>{formatDays(a)}</td>
-                      <td style={{ padding: '14px 0', color: '#555' }}>{a.time}</td>
-                      <td style={{ padding: '14px 0', color: '#888' }}>{a.age_group}</td>
-                      <td style={{ padding: '14px 0', color: '#888', textAlign: 'left' }}>{a.price ? `₪${a.price}` : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p style={{ color: '#bbb', textAlign: 'center', padding: '24px 0' }}>אין חוגים זמינים כרגע</p>
-            )}
-          </div>
         </div>
       </main>
     )
@@ -367,6 +363,20 @@ export default function Register() {
           <span style={{ fontSize: '13px', color: '#444', lineHeight: 1.6 }}>{termsText}</span>
         </label>
 
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>
+            חתימה — שם מלא <span style={{ color: '#c00' }}>*</span>
+          </label>
+          <input
+            type="text"
+            value={signatureName}
+            onChange={e => setSignatureName(e.target.value)}
+            placeholder="הקלד/י את שמך המלא כאישור וחתימה"
+            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '15px', boxSizing: 'border-box' }}
+          />
+          <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>הקלדת השם מהווה חתימה דיגיטלית לאישור ההרשמה ותנאיה</div>
+        </div>
+
         {error && (
           <p style={{ color: '#c00', background: '#fff0f0', padding: '10px', borderRadius: '8px', margin: 0, fontSize: '14px' }}>
             {error}
@@ -375,7 +385,7 @@ export default function Register() {
 
         <button
           type="submit"
-          disabled={submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
+          disabled={submitting || !termsAccepted || !signatureName.trim() || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
           style={{
             background: '#1a472a',
             color: '#fff',
@@ -385,7 +395,7 @@ export default function Register() {
             fontSize: '16px',
             fontWeight: 'bold',
             cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: (submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
+            opacity: (submitting || !termsAccepted || !signatureName.trim() || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
           }}
         >
           {submitting ? 'רושם...' : 'אישור הרשמה'}

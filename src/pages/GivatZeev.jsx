@@ -6,7 +6,7 @@ const defaults = {
 }
 
 const externalDefault = {
-  url: 'https://www.givatzeev.org.il/page.php?type=classHug&id=5613&bc=AC9&ht=%D7%98%D7%A0%D7%99%D7%A1',
+  url: 'https://www.givatzeev.org.il/page.php?type=hugSearch&tab=hugim&view=list&sort=name&sy=2026&hp=&cat%5B%5D=30&q=%D7%98%D7%A0%D7%99%D7%A1&sort=name',
   label: 'הרשמה דרך המתנ"ס',
 }
 
