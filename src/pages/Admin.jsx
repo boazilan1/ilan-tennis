@@ -403,6 +403,12 @@ function TraineesTab() {
     setEditingId(null)
   }
 
+  async function deletePlayer(p) {
+    if (!window.confirm(`למחוק לצמיתות את ${p.name}? זה ימחק גם את כל ההרשמות שלו לחוגים.`)) return
+    await supabase.from('players').delete().eq('id', p.id)
+    setPlayers(prev => prev.filter(x => x.id !== p.id))
+  }
+
   function matchesSearch(p) {
     return !search || p.name.includes(search) || p.profile?.full_name?.includes(search) || p.profile?.phone?.includes(search)
   }
@@ -548,7 +554,7 @@ function TraineesTab() {
                       return (
                         <div key={`${p.id}-${enrollment?.activity?.id || 'none'}`} style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', borderRight: `4px solid ${stInfo.color}`, overflow: 'hidden' }}>
                           {editingId !== p.id ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr auto auto', alignItems: 'center', gap: '12px', padding: '16px 20px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr auto auto auto', alignItems: 'center', gap: '12px', padding: '16px 20px' }}>
                               <div>
                                 <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{p.name}</div>
                                 <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {p.birth_year}</div>
@@ -560,6 +566,7 @@ function TraineesTab() {
                               </div>
                               <StatusPill label={stInfo.label} color={stInfo.color} bg={stInfo.bg} />
                               <button onClick={() => startEdit(p)} style={outlineBtn}>עריכה</button>
+                              <ActionBtn label="מחק" color="#dc2626" outline onClick={() => deletePlayer(p)} />
                             </div>
                           ) : (
                             <div style={{ padding: '16px 20px', background: '#f9fdf9' }}>
@@ -877,7 +884,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
   async function openActivity(activity, date) {
     setSelected({ type: 'activity', data: activity, date })
-    setShowEventForm(false); setShowAddPlayer(false); setAddPlayerSearch('')
+    setShowEventForm(false); setAddPlayerSearch('')
     setLoadingSession(true); setEnrollments([]); setAttendance({})
     setActivitySession({ status: 'scheduled', notes: '' })
     const dateStr = formatDate(date)
@@ -934,7 +941,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     else await supabase.from('enrollments').insert({ activity_id: selected.data.id, player_id: playerId, user_id: player?.user_id || null, status: 'active' })
     const { data } = await supabase.from('enrollments').select('player_id, player:players(id, name, birth_year)').eq('activity_id', selected.data.id).eq('status', 'active')
     if (data) setEnrollments(data)
-    setShowAddPlayer(false); setAddPlayerSearch(''); setAddingPlayer(false)
+    setAddPlayerSearch(''); setAddingPlayer(false)
   }
 
   async function saveEventDetails() {
