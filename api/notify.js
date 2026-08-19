@@ -1,20 +1,18 @@
+import nodemailer from 'nodemailer'
+
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
-async function sendEmail(apiKey, message) {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(message),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Resend error ${res.status}: ${body}`)
+let cachedTransporter = null
+function getTransporter(user, pass) {
+  if (!cachedTransporter) {
+    cachedTransporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user, pass },
+    })
   }
+  return cachedTransporter
 }
 
 export default async function handler(req, res) {
@@ -23,14 +21,15 @@ export default async function handler(req, res) {
     return
   }
 
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
+  const gmailUser = process.env.GMAIL_USER
+  const gmailPass = process.env.GMAIL_APP_PASSWORD
+  if (!gmailUser || !gmailPass) {
     res.status(500).json({ error: 'Email service not configured' })
     return
   }
 
-  const from = process.env.RESEND_FROM_EMAIL || 'אילן טניס <onboarding@resend.dev>'
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || 'ilantennisacademy@gmail.com'
+  const from = `אילן טניס <${gmailUser}>`
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || gmailUser
 
   const { type, registrantEmail, registrantName, playerName, activityName, activityDay, activityTime, price } = req.body || {}
 
@@ -90,7 +89,8 @@ export default async function handler(req, res) {
     return
   }
 
-  const results = await Promise.allSettled(messages.map(msg => sendEmail(apiKey, msg)))
+  const transporter = getTransporter(gmailUser, gmailPass)
+  const results = await Promise.allSettled(messages.map(msg => transporter.sendMail(msg)))
   results.forEach((result, i) => {
     if (result.status === 'rejected') {
       console.error(`notify email error (to: ${messages[i].to})`, result.reason)
