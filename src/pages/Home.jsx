@@ -33,6 +33,8 @@ function FeatureIcon({ value, size, color }) {
 export default function Home() {
   const [s, setS] = useState(DEFAULTS)
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [programs, setPrograms] = useState([])
+  const [openPrograms, setOpenPrograms] = useState([])
 
   useEffect(() => {
     supabase.from('site_settings').select('key, value').then(({ data }) => {
@@ -42,7 +44,14 @@ export default function Home() {
         setS(prev => ({ ...prev, ...map }))
       }
     })
+    supabase.from('activity_sections').select('*').order('sort_order').then(({ data }) => {
+      if (data) setPrograms(data.filter(p => p.title !== 'גבעת זאב'))
+    })
   }, [])
+
+  function toggleProgram(id) {
+    setOpenPrograms(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
 
   const g = k => s[k] || DEFAULTS[k] || ''
   const gs = k => Number(g(k)) || Number(DEFAULTS[k]) || 14
@@ -71,9 +80,9 @@ export default function Home() {
           {g('home_hero_subtitle')}
         </p>
         <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Link to="/activities" style={{ background: 'white', color: '#1a472a', padding: '13px 32px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px' }}>
+          <a href="#programs" style={{ background: 'white', color: '#1a472a', padding: '13px 32px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px' }}>
             {g('home_hero_cta1')}
-          </Link>
+          </a>
           <Link to="/register" style={{ background: 'transparent', color: 'white', border: '2px solid rgba(255,255,255,0.6)', padding: '13px 32px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px' }}>
             {g('home_hero_cta2')}
           </Link>
@@ -116,6 +125,48 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Programs */}
+      {programs.length > 0 && (
+        <section id="programs" style={{ maxWidth: '700px', margin: '60px auto 0', padding: '0 20px' }}>
+          <h2 style={{ textAlign: 'center', color: '#1a472a', fontSize: '22px', fontWeight: '800', marginBottom: '20px' }}>
+            תוכניות ופעילויות
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {programs.map(p => {
+              const isOpen = openPrograms.includes(p.id)
+              return (
+                <div key={p.id} style={{ background: 'white', borderRadius: '14px', border: '1px solid #eee', overflow: 'hidden' }}>
+                  <div
+                    onClick={() => toggleProgram(p.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 20px', cursor: 'pointer' }}
+                  >
+                    <span style={{ fontSize: '22px' }}>{p.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '700', fontSize: '15px', color: '#1a472a' }}>{p.title}</div>
+                      {p.subtitle && <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{p.subtitle}</div>}
+                    </div>
+                    <span style={{ color: '#bbb', transition: 'transform 0.15s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+                  </div>
+                  {isOpen && (
+                    <div style={{ padding: '0 20px 18px' }}>
+                      {p.content && p.content.split('\n').filter(Boolean).map((line, i) => (
+                        <p key={i} style={{ margin: '0 0 6px', fontSize: '13px', color: '#666', lineHeight: 1.7 }}>{line}</p>
+                      ))}
+                      {p.link_url && (
+                        <a href={p.link_url} target="_blank" rel="noreferrer" style={{
+                          display: 'inline-block', marginTop: '6px', color: '#1a472a', fontWeight: '700',
+                          fontSize: '13px', textDecoration: 'none', borderBottom: '1px solid #1a472a',
+                        }}>{p.link_label || 'לפרטים נוספים'}</a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       {/* About */}
       {g('home_about_text') && (() => {
         const paragraphs = g('home_about_text').split('\n').filter(Boolean)
@@ -147,7 +198,7 @@ export default function Home() {
         <div style={{ maxWidth: '560px', margin: '0 auto', background: 'var(--sand-light)', border: '1px solid var(--sand)', borderRadius: '20px', padding: '40px 30px' }}>
           <h2 style={{ color: '#1a472a', fontSize: gs('home_cta_title_size') + 'px', fontWeight: '800', marginBottom: '12px' }}>{g('home_cta_title')}</h2>
           <p style={{ color: '#666', marginBottom: '28px', fontSize: '15px' }}>{g('home_cta_subtitle')}</p>
-          <Link to="/activities" style={{ background: '#1a472a', color: 'white', padding: '14px 40px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 16px rgba(26,71,42,0.25)' }}>
+          <Link to="/register" style={{ background: '#1a472a', color: 'white', padding: '14px 40px', borderRadius: '30px', textDecoration: 'none', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 16px rgba(26,71,42,0.25)' }}>
             {g('home_cta_button')}
           </Link>
         </div>

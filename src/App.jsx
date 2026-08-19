@@ -3,7 +3,6 @@ import { AuthProvider } from './context/AuthContext'
 import Header from './components/Header'
 import Footer from './components/Footer'
 import Home from './pages/Home'
-import Activities from './pages/Activities'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Register from './pages/Register'
@@ -14,6 +13,7 @@ import ResetPassword from './pages/ResetPassword'
 import Contact from './pages/Contact'
 import DynamicPage from './pages/DynamicPage'
 import Nokdim from './pages/Nokdim'
+import GivatZeev from './pages/GivatZeev'
 
 function App() {
   return (
@@ -23,7 +23,6 @@ function App() {
           <Header />
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/activities" element={<Activities />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/register" element={<Register />} />
@@ -34,6 +33,8 @@ function App() {
             <Route path="/contact" element={<Contact />} />
             <Route path="/נוקדים" element={<Nokdim />} />
             <Route path="/nokdim" element={<Nokdim />} />
+            <Route path="/גבעת-זאב" element={<GivatZeev />} />
+            <Route path="/givat-zeev" element={<GivatZeev />} />
             <Route path="/page/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer />

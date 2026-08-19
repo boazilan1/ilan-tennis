@@ -228,10 +228,10 @@ export default function Register() {
           <h2 style={{ color: '#1a472a', marginBottom: '8px' }}>ההרשמה בוצעה בהצלחה!</h2>
           <p style={{ color: '#555', marginBottom: '24px' }}>נרשמת לחוג <strong>{activity.name}</strong></p>
           <button
-            onClick={() => navigate('/activities')}
+            onClick={() => navigate('/')}
             style={{ background: '#1a472a', color: '#fff', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '15px', cursor: 'pointer' }}
           >
-            חזרה לחוגים
+            חזרה לעמוד הבית
           </button>
         </div>
       </main>

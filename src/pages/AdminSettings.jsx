@@ -18,12 +18,14 @@ const ALL_KEYS = [
   'home_l2_icon','home_l2_title','home_l2_text',
   'home_l3_icon','home_l3_title','home_l3_text',
   'home_l4_icon','home_l4_title','home_l4_text',
-  'activities_hero_title','activities_hero_title_size','activities_hero_subtitle','activities_hero_subtitle_size',
   'contact_hero_title','contact_hero_title_size','contact_hero_subtitle','contact_hero_subtitle_size',
   'notify_ntfy_topic','notify_email',
   'header_logo_text','header_logo_url','footer_title','footer_subtitle','footer_email',
   'nokdim_hero_title','nokdim_hero_title_size','nokdim_hero_subtitle','nokdim_hero_cta',
   'nokdim_intro_title','nokdim_intro_text','nokdim_image_url','nokdim_image_pos_x','nokdim_image_pos_y',
+  'givatzeev_hero_title','givatzeev_hero_title_size','givatzeev_hero_subtitle','givatzeev_hero_cta',
+  'givatzeev_intro_title','givatzeev_intro_text','givatzeev_image_url','givatzeev_image_pos_x','givatzeev_image_pos_y',
+  'givatzeev_external_url','givatzeev_external_label',
   'register_terms_text',
 ]
 
@@ -206,9 +208,50 @@ function FooterItemsEditor() {
   )
 }
 
+function LocationTabFields({ prefix, label, folder, g, set, external }) {
+  return (
+    <>
+      <Card title={`עמוד נחיתה — ${label}`}>
+        <Field label="כותרת ראשית" value={g(`${prefix}_hero_title`)} onChange={v => set(`${prefix}_hero_title`, v)}
+          size={{ value: g(`${prefix}_hero_title_size`) || '36', onChange: v => set(`${prefix}_hero_title_size`, v) }} />
+        <Field label="כותרת משנה" value={g(`${prefix}_hero_subtitle`)} onChange={v => set(`${prefix}_hero_subtitle`, v)} textarea />
+        <Field label="טקסט כפתור הרשמה" value={g(`${prefix}_hero_cta`)} onChange={v => set(`${prefix}_hero_cta`, v)} />
+      </Card>
+
+      <Card title="תמונת רקע להירו">
+        <ImageUpload value={g(`${prefix}_image_url`)} onChange={v => set(`${prefix}_image_url`, v)} folder={folder} />
+        <ImagePositionPicker
+          imageUrl={g(`${prefix}_image_url`)}
+          x={Number(g(`${prefix}_image_pos_x`)) || 50}
+          y={Number(g(`${prefix}_image_pos_y`)) || 50}
+          onChange={(x, y) => { set(`${prefix}_image_pos_x`, String(x)); set(`${prefix}_image_pos_y`, String(y)) }}
+        />
+      </Card>
+
+      <Card title={`תוכן — על הפעילות ב${label}`}>
+        <Field label="כותרת" value={g(`${prefix}_intro_title`)} onChange={v => set(`${prefix}_intro_title`, v)} />
+        <Field label="תיאור (כל שורה = פסקה)" value={g(`${prefix}_intro_text`)} onChange={v => set(`${prefix}_intro_text`, v)} textarea rows={6} />
+      </Card>
+
+      {external && (
+        <Card title="הרשמה חיצונית (כשאין חוגים מקושרים במערכת)">
+          <Field label="קישור להרשמה חיצונית" value={g(`${prefix}_external_url`)} onChange={v => set(`${prefix}_external_url`, v)} />
+          <Field label="טקסט הכפתור" value={g(`${prefix}_external_label`)} onChange={v => set(`${prefix}_external_label`, v)} />
+          <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>מוצג רק אם אין חוגים מקושרים למיקום זה בטאב "חוגים"</div>
+        </Card>
+      )}
+
+      <div style={{ background: '#f0f7f0', border: '1px solid #c5ddc5', borderRadius: '10px', padding: '12px', fontSize: '12px', color: '#2d5a3d', lineHeight: 1.7 }}>
+        <b>המשבצות</b> (ימים, שעה, מחיר, קבוצת גיל) נשלפות אוטומטית מהחוגים שמוגדרים בטאב "חוגים" ומקושרים למיקום "{label}".
+      </div>
+    </>
+  )
+}
+
 const TABS = [
   { key: 'home', label: '🏠 דף בית' },
   { key: 'nokdim', label: '🎾 נוקדים' },
+  { key: 'givatzeev', label: '📍 גבעת זאב' },
   { key: 'pages', label: '📄 דפים נוספים' },
   { key: 'layout', label: '🔤 הדר ופוטר' },
   { key: 'notify', label: '🔔 התראות' },
@@ -339,42 +382,11 @@ export default function AdminSettings() {
           </Card>
         </>}
 
-        {tab === 'nokdim' && <>
-          <Card title="עמוד נחיתה — נוקדים">
-            <Field label="כותרת ראשית" value={g('nokdim_hero_title')} onChange={v => set('nokdim_hero_title', v)}
-              size={{ value: g('nokdim_hero_title_size') || '36', onChange: v => set('nokdim_hero_title_size', v) }} />
-            <Field label="כותרת משנה" value={g('nokdim_hero_subtitle')} onChange={v => set('nokdim_hero_subtitle', v)} textarea />
-            <Field label="טקסט כפתור הרשמה" value={g('nokdim_hero_cta')} onChange={v => set('nokdim_hero_cta', v)} />
-          </Card>
+        {tab === 'nokdim' && <LocationTabFields prefix="nokdim" label="נוקדים" folder="nokdim" g={g} set={set} />}
 
-          <Card title="תמונת רקע להירו">
-            <ImageUpload value={g('nokdim_image_url')} onChange={v => set('nokdim_image_url', v)} folder="nokdim" />
-            <ImagePositionPicker
-              imageUrl={g('nokdim_image_url')}
-              x={Number(g('nokdim_image_pos_x')) || 50}
-              y={Number(g('nokdim_image_pos_y')) || 50}
-              onChange={(x, y) => { set('nokdim_image_pos_x', String(x)); set('nokdim_image_pos_y', String(y)) }}
-            />
-          </Card>
-
-          <Card title="תוכן — על הפעילות בנוקדים">
-            <Field label="כותרת" value={g('nokdim_intro_title')} onChange={v => set('nokdim_intro_title', v)} />
-            <Field label="תיאור (כל שורה = פסקה)" value={g('nokdim_intro_text')} onChange={v => set('nokdim_intro_text', v)} textarea />
-          </Card>
-
-          <div style={{ background: '#f0f7f0', border: '1px solid #c5ddc5', borderRadius: '10px', padding: '12px', fontSize: '12px', color: '#2d5a3d', lineHeight: 1.7 }}>
-            <b>המשבצות</b> (ימים, שעה, מחיר, קבוצת גיל) נשלפות אוטומטית מהחוגים שמוגדרים בטאב "חוגים" ומקושרים למיקום "נוקדים".
-          </div>
-        </>}
+        {tab === 'givatzeev' && <LocationTabFields prefix="givatzeev" label="גבעת זאב" folder="givatzeev" g={g} set={set} external />}
 
         {tab === 'pages' && <>
-          <Card title="דף פעילויות — כותרת עליונה">
-            <Field label="כותרת ראשית" value={g('activities_hero_title')} onChange={v => set('activities_hero_title', v)}
-              size={{ value: g('activities_hero_title_size') || '30', onChange: v => set('activities_hero_title_size', v) }} />
-            <Field label="כותרת משנה" value={g('activities_hero_subtitle')} onChange={v => set('activities_hero_subtitle', v)} textarea
-              size={{ value: g('activities_hero_subtitle_size') || '16', onChange: v => set('activities_hero_subtitle_size', v) }} />
-          </Card>
-
           <Card title="הרשמה — תנאי הרשמה">
             <Field label="נוסח האישור (מוצג עם תיבת סימון בטופס ההרשמה)" value={g('register_terms_text')} onChange={v => set('register_terms_text', v)} textarea />
           </Card>

@@ -34,7 +34,7 @@ export default function Header() {
 
   const navLinks = [
     { to: '/', label: 'בית' },
-    { to: '/activities', label: 'פעילויות' },
+    { to: '/גבעת-זאב', label: 'גבעת זאב' },
     { to: '/נוקדים', label: 'נוקדים' },
     { to: '/tournaments', label: 'תחרויות' },
     ...dynamicPages.map(p => ({ to: `/page/${p.slug}`, label: p.title })),
