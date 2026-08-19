@@ -283,6 +283,7 @@ function EnrollmentsTab() {
                           <div style={{ flex: '1.5' }}>
                             <div style={{ fontSize: '14px', color: '#333', fontWeight: '500' }}>{e.profile?.full_name || '—'}</div>
                             <div style={{ fontSize: '12px', color: '#aaa' }}>{e.profile?.phone || ''}</div>
+                            <div style={{ fontSize: '12px', color: '#aaa' }}>{e.profile?.email || ''}</div>
                           </div>
                           <div style={{ fontSize: '12px', color: '#bbb', minWidth: '70px', textAlign: 'center' }}>{date}</div>
                           {e.status === 'pending' && e.payment_redirect_at && (
