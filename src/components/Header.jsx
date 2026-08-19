@@ -38,7 +38,6 @@ export default function Header() {
     { to: '/נוקדים', label: 'נוקדים' },
     { to: '/tournaments', label: 'תחרויות' },
     ...dynamicPages.map(p => ({ to: `/page/${p.slug}`, label: p.title })),
-    { to: '/register', label: 'הרשמה לחוג' },
     ...(isAdmin ? [{ to: '/admin', label: 'ניהול', icon: 'settings' }] : []),
   ]
 

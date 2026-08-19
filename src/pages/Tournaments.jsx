@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Icon from '../components/Icon'
+import SectionCurve from '../components/SectionCurve'
 
 const STATUS_T = {
   draft:     { label: 'טיוטה',      color: '#9ca3af' },
@@ -323,12 +324,17 @@ export default function Tournaments() {
 
   // ── Tournament list ──
   return (
-    <main style={{ maxWidth: 900, margin: '40px auto', padding: '0 20px' }} dir="rtl">
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: '800', color: '#111', display: 'flex', alignItems: 'center', gap: '10px' }}>תחרויות<Icon name="trophy" size={24} color="#1a472a" /></h1>
-        <p style={{ margin: '6px 0 0', color: '#888', fontSize: 15 }}>תוצאות ולוחות תחרויות</p>
+    <main style={{ flex: 1, background: '#f3f6f3' }} dir="rtl">
+      <div style={{
+        background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
+        color: 'white', textAlign: 'center', padding: '52px 24px 60px', position: 'relative',
+      }}>
+        <h1 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>תחרויות<Icon name="trophy" size={24} color="#fff" /></h1>
+        <p style={{ margin: 0, opacity: 0.85, fontSize: 15 }}>תוצאות ולוחות תחרויות</p>
+        <SectionCurve fill="#f3f6f3" />
       </div>
 
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '48px 20px' }}>
       {tournaments.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 80 }}>
           <div style={{ marginBottom: 16 }}><Icon name="ball" size={42} color="#ddd" /></div>
@@ -362,6 +368,7 @@ export default function Tournaments() {
           })}
         </div>
       )}
+      </div>
     </main>
   )
 }

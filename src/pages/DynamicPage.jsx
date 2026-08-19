@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Icon from '../components/Icon'
+import SectionCurve from '../components/SectionCurve'
 
 export default function DynamicPage() {
   const { slug } = useParams()
@@ -57,12 +58,14 @@ export default function DynamicPage() {
       {/* Hero */}
       <div style={{
         background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)',
-        color: 'white', textAlign: 'center', padding: '48px 24px 40px',
+        color: 'white', textAlign: 'center', padding: '48px 24px 60px',
+        position: 'relative',
       }}>
         <h1 style={{ fontSize: '28px', fontWeight: '800', margin: '0 0 10px', letterSpacing: '-0.5px' }}>{page.title}</h1>
         {page.description && (
           <p style={{ opacity: 0.85, fontSize: '15px', margin: 0, maxWidth: '600px', marginInline: 'auto' }}>{page.description}</p>
         )}
+        <SectionCurve fill="#f3f6f3" />
       </div>
 
       {/* Sections */}

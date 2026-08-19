@@ -180,22 +180,23 @@ export default function Register() {
                   <h2 style={{ color: '#1a472a', fontSize: '17px', fontWeight: '800', marginBottom: '10px' }}>
                     {group.location?.name || 'כללי'}
                   </h2>
-                  <div style={{ background: 'white', borderRadius: '4px', boxShadow: '0 2px 20px rgba(0,0,0,0.06)', overflow: 'hidden', padding: '10px 24px' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                      <tbody>
-                        {group.items.map((a, i) => (
-                          <tr key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
-                            cursor: 'pointer', borderBottom: i < group.items.length - 1 ? '1px solid #eee' : 'none',
-                          }}>
-                            <td style={{ padding: '14px 0', color: '#1a472a', fontWeight: '600' }}>{a.name}</td>
-                            <td style={{ padding: '14px 0', color: '#555' }}>{formatDays(a)}</td>
-                            <td style={{ padding: '14px 0', color: '#555' }}>{a.time}</td>
-                            <td style={{ padding: '14px 0', color: '#888' }}>{a.age_group}</td>
-                            <td style={{ padding: '14px 0', color: '#888', textAlign: 'left' }}>{a.price ? `₪${a.price}` : ''}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {group.items.map(a => (
+                      <button key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
+                        background: 'white', border: '1px solid #e8ece8', borderRight: '4px solid #1a472a',
+                        borderRadius: '14px', padding: '18px 20px', cursor: 'pointer', textAlign: 'right',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '6px',
+                      }}>
+                        <div style={{ fontWeight: '800', fontSize: '17px', color: '#1a472a' }}>{a.name}</div>
+                        {a.description && <div style={{ fontSize: '13px', color: '#666' }}>{a.description}</div>}
+                        <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#555', flexWrap: 'wrap', marginTop: '2px' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="calendar" size={14} color="var(--sand)" />{formatDays(a)}</span>
+                          {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="clock" size={14} color="var(--sand)" />{a.time}</span>}
+                          {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="users" size={14} color="var(--sand)" />{a.age_group}</span>}
+                          {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="tag" size={14} color="var(--sand)" />₪{a.price} לחודש</span>}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -242,9 +243,10 @@ export default function Register() {
       <h1 style={{ color: '#1a472a', marginBottom: '4px', textAlign: 'center' }}>הרשמה לחוג</h1>
 
       {/* פרטי החוג */}
-      <div style={{ background: 'white', borderRadius: '4px', boxShadow: '0 2px 20px rgba(0,0,0,0.06)', padding: '18px 20px', marginBottom: '28px' }}>
-        <div style={{ color: '#1a472a', fontWeight: '600', fontSize: '15px', marginBottom: '4px' }}>{activity.name}</div>
-        <div style={{ fontSize: '13px', color: '#888' }}>{formatDays(activity)} · {activity.time} · ₪{activity.price} לחודש</div>
+      <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
+        <h3 style={{ margin: '0 0 8px', color: '#1a472a' }}>{activity.name}</h3>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(activity)} בשעה {activity.time}</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{activity.price} לחודש</p>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
