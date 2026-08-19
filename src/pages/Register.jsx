@@ -129,9 +129,11 @@ export default function Register() {
         return
       }
 
-      const { error: enrollError } = await supabase
+      const { data: newEnrollment, error: enrollError } = await supabase
         .from('enrollments')
         .insert({ user_id: user.id, player_id: playerId, activity_id: activityId, status: 'pending', terms_accepted_at: new Date().toISOString(), signature_name: signatureName.trim() })
+        .select()
+        .single()
 
       if (enrollError) {
         if (enrollError.code === '23505') {
@@ -144,6 +146,9 @@ export default function Register() {
       }
 
       // מעבר לתשלום
+      sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
+        id: newEnrollment.id, activityName: activity.name,
+      }))
       const paymentUrl = activity.payment_link || 'https://mrng.to/yLXsO2hg8s'
       window.location.href = paymentUrl
     } catch (err) {

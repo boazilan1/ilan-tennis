@@ -125,7 +125,7 @@ function EnrollmentsTab() {
     setDataLoading(true)
     const [enrollRes, actRes] = await Promise.all([
       supabase.from('enrollments').select(`
-        id, status, created_at, activity_id,
+        id, status, created_at, activity_id, payment_redirect_at,
         player:players(name, birth_year),
         profile:profiles!enrollments_user_id_fkey(full_name, phone)
       `).order('created_at', { ascending: false }),
@@ -214,6 +214,12 @@ function EnrollmentsTab() {
                   ) : <span style={{ color: '#ccc' }}>—</span>}
                 </div>
                 <div style={{ fontSize: '12px', color: '#bbb', minWidth: '70px', textAlign: 'center' }}>{date}</div>
+                {e.status === 'pending' && e.payment_redirect_at && (
+                  <span title={`חזר מהתשלום ב-${new Date(e.payment_redirect_at).toLocaleString('he-IL')}`} style={{
+                    fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fffbeb',
+                    border: '1px solid #fde68a', borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
+                  }}>חזר מתשלום ✓</span>
+                )}
                 <StatusPill label={st.label} color={st.color} bg={st.bg} />
                 <div style={{ display: 'flex', gap: '6px' }}>
                   {e.status !== 'active' && (

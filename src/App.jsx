@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Register from './pages/Register'
+import RegisterThankYou from './pages/RegisterThankYou'
 import Admin from './pages/Admin'
 import Tournaments from './pages/Tournaments'
 import ForgotPassword from './pages/ForgotPassword'
@@ -26,6 +27,7 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/register/thank-you" element={<RegisterThankYou />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/tournaments" element={<Tournaments />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
