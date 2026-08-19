@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import ImageUpload from '../components/ImageUpload'
+import FileUpload from '../components/FileUpload'
 
 const inp = { width: '100%', padding: '9px 11px', borderRadius: '8px', border: '1px solid #ddd', fontSize: '14px', boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit' }
 const lbl = { display: 'block', fontSize: '11px', fontWeight: '700', color: '#666', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }
@@ -26,7 +27,7 @@ const ALL_KEYS = [
   'givatzeev_hero_title','givatzeev_hero_title_size','givatzeev_hero_subtitle','givatzeev_hero_cta',
   'givatzeev_intro_title','givatzeev_intro_text','givatzeev_image_url','givatzeev_image_pos_x','givatzeev_image_pos_y',
   'givatzeev_external_url','givatzeev_external_label',
-  'register_terms_text',
+  'register_terms_text','register_terms_file_url',
 ]
 
 function SizeInput({ value, onChange }) {
@@ -389,6 +390,11 @@ export default function AdminSettings() {
         {tab === 'pages' && <>
           <Card title="הרשמה — תנאי הרשמה">
             <Field label="נוסח האישור (מוצג עם תיבת סימון בטופס ההרשמה)" value={g('register_terms_text')} onChange={v => set('register_terms_text', v)} textarea />
+            <div style={{ marginTop: '14px' }}>
+              <label style={lbl}>קובץ תנאי הרשמה מלאים (PDF)</label>
+              <FileUpload value={g('register_terms_file_url')} onChange={v => set('register_terms_file_url', v)} folder="documents" accept=".pdf" label="קובץ PDF" />
+              <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>אופציונלי — אם מועלה קובץ, יופיע קישור "לצפייה בתנאים המלאים" ליד תיבת האישור בטופס ההרשמה</div>
+            </div>
           </Card>
 
           <Card title="דף יצירת קשר — כותרת עליונה">
