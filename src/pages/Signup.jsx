@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function Signup() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
@@ -38,11 +40,11 @@ export default function Signup() {
       if (!data.session) {
         setError('')
         alert('נשלח אליך מייל לאימות החשבון. יש לאשר אותו לפני הכניסה למערכת.')
-        navigate('/login')
+        navigate(`/login?redirect=${encodeURIComponent(redirectTo)}`)
         return
       }
 
-      navigate('/')
+      navigate(redirectTo)
     } catch (err) {
       setError('אירעה שגיאה, נסה שוב')
       console.error(err)
@@ -87,7 +89,7 @@ export default function Signup() {
 
         <p style={{ textAlign: 'center', marginTop: '24px', color: '#666' }}>
           יש לך כבר חשבון?{' '}
-          <Link to="/login" style={{ color: '#1a472a', fontWeight: 'bold' }}>כניסה</Link>
+          <Link to={`/login?redirect=${encodeURIComponent(redirectTo)}`} style={{ color: '#1a472a', fontWeight: 'bold' }}>כניסה</Link>
         </p>
       </div>
     </main>

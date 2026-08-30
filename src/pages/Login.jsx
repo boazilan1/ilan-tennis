@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function Login() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -15,7 +17,7 @@ export default function Login() {
     setLoading(true)
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) setError('אימייל או סיסמה שגויים')
-    else navigate('/')
+    else navigate(redirectTo)
     setLoading(false)
   }
 
@@ -64,7 +66,7 @@ export default function Login() {
         </p>
         <p style={{ textAlign: 'center', marginTop: '12px', color: '#666' }}>
           אין לך חשבון?{' '}
-          <Link to="/signup" style={{ color: '#1a472a', fontWeight: 'bold' }}>הרשמה</Link>
+          <Link to={`/signup?redirect=${encodeURIComponent(redirectTo)}`} style={{ color: '#1a472a', fontWeight: 'bold' }}>הרשמה</Link>
         </p>
       </div>
     </main>

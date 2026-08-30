@@ -15,6 +15,7 @@ import Contact from './pages/Contact'
 import DynamicPage from './pages/DynamicPage'
 import Nokdim from './pages/Nokdim'
 import GivatZeev from './pages/GivatZeev'
+import TrialLesson from './pages/TrialLesson'
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
             <Route path="/nokdim" element={<Nokdim />} />
             <Route path="/גבעת-זאב" element={<GivatZeev />} />
             <Route path="/givat-zeev" element={<GivatZeev />} />
+            <Route path="/trial-lesson" element={<TrialLesson />} />
             <Route path="/page/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer />

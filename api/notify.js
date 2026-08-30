@@ -31,9 +31,13 @@ export default async function handler(req, res) {
   const from = `אילן טניס <${gmailUser}>`
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || gmailUser
 
-  const { type, registrantEmail, registrantName, playerName, activityName, activityDay, activityTime, price } = req.body || {}
+  const { type, registrantEmail, registrantName, playerName, activityName, activityDay, activityTime, price, phone, lessonDate, timeSlot, ageGroup } = req.body || {}
 
-  if (!type || !registrantEmail || !playerName || !activityName) {
+  if (!type || !registrantEmail) {
+    res.status(400).json({ error: 'Missing required fields' })
+    return
+  }
+  if (type !== 'trial_signup' && (!playerName || !activityName)) {
     res.status(400).json({ error: 'Missing required fields' })
     return
   }
@@ -67,6 +71,35 @@ export default async function handler(req, res) {
           ${price ? `<p><strong>מחיר:</strong> ₪${escapeHtml(String(price))}</p>` : ''}
           <p><strong>נרשם/ה על ידי:</strong> ${escapeHtml(registrantName || '—')} (${escapeHtml(registrantEmail)})</p>
           <p style="color:#d97706;"><strong>סטטוס:</strong> ממתין לאישור תשלום</p>
+        </div>
+      `,
+    })
+  } else if (type === 'trial_signup') {
+    messages.push({
+      from,
+      to: registrantEmail,
+      subject: `קיבלנו את ההרשמה שלך לשיעור ניסיון`,
+      html: `
+        <div dir="rtl" style="font-family: Arial, sans-serif; color: #222;">
+          <h2 style="color: #1a472a;">נרשמת לשיעור ניסיון! 🎾</h2>
+          <p>קיבלנו את ההרשמה שלך לשיעור ניסיון בנוקדים, בתאריך <strong>${escapeHtml(lessonDate || '')}</strong> בשעה <strong>${escapeHtml(timeSlot || '')}</strong> (${escapeHtml(ageGroup || '')}).</p>
+          <p>נחזור אליך בהקדם לאישור הפרטים.</p>
+          <p>בברכה,<br/>אילן טניס</p>
+        </div>
+      `,
+    })
+    messages.push({
+      from,
+      to: adminEmail,
+      subject: `הרשמה חדשה לשיעור ניסיון: ${registrantName}`,
+      html: `
+        <div dir="rtl" style="font-family: Arial, sans-serif; color: #222;">
+          <h2 style="color: #1a472a;">הרשמה חדשה לשיעור ניסיון — נוקדים</h2>
+          <p><strong>שם:</strong> ${escapeHtml(registrantName || '')}</p>
+          <p><strong>טלפון:</strong> ${escapeHtml(phone || '')}</p>
+          <p><strong>אימייל:</strong> ${escapeHtml(registrantEmail)}</p>
+          <p><strong>תאריך:</strong> ${escapeHtml(lessonDate || '')}</p>
+          <p><strong>שעה:</strong> ${escapeHtml(timeSlot || '')} (${escapeHtml(ageGroup || '')})</p>
         </div>
       `,
     })
