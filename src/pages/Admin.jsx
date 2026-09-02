@@ -893,6 +893,9 @@ function CalendarTab() {
   const [allPlayers, setAllPlayers] = useState([])
   const [trialSignups, setTrialSignups] = useState([])
   const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
+  const [walkInName, setWalkInName] = useState('')
+  const [walkInNotes, setWalkInNotes] = useState('')
+  const [addingWalkIn, setAddingWalkIn] = useState(false)
   const [selected, setSelected] = useState(null)
   const [enrollments, setEnrollments] = useState([])
   const [attendance, setAttendance] = useState({})
@@ -1016,19 +1019,48 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   function openTrialSlot(slot, date) {
     setSelected({ type: 'trial', data: slot, date })
     setShowEventForm(false); setShowDeleteOptions(false)
+    setWalkInName(''); setWalkInNotes('')
+  }
+
+  function updateTrialSignupLocal(signupId, patch) {
+    setSelected(prev => ({
+      ...prev,
+      data: { ...prev.data, signups: prev.data.signups.map(s => s.id === signupId ? { ...s, ...patch } : s) },
+    }))
+    setTrialSignups(prev => prev.map(s => s.id === signupId ? { ...s, ...patch } : s))
   }
 
   async function toggleTrialAttendance(signupId) {
     const signup = selected.data.signups.find(s => s.id === signupId)
     const newVal = signup.attended === true ? false : true
-    setSelected(prev => ({
-      ...prev,
-      data: { ...prev.data, signups: prev.data.signups.map(s => s.id === signupId ? { ...s, attended: newVal } : s) },
-    }))
-    setTrialSignups(prev => prev.map(s => s.id === signupId ? { ...s, attended: newVal } : s))
+    updateTrialSignupLocal(signupId, { attended: newVal })
     setSavingTrialAttendance(true)
     await supabase.from('trial_signups').update({ attended: newVal }).eq('id', signupId)
     setSavingTrialAttendance(false)
+  }
+
+  async function saveTrialAttendanceNote(signupId, note) {
+    updateTrialSignupLocal(signupId, { attendance_note: note })
+    await supabase.from('trial_signups').update({ attendance_note: note || null }).eq('id', signupId)
+  }
+
+  async function addWalkInTrial() {
+    if (!walkInName.trim()) return
+    setAddingWalkIn(true)
+    const { data, error } = await supabase.from('trial_signups').insert({
+      full_name: walkInName.trim(),
+      phone: 'לעדכן',
+      lesson_date: formatDate(selected.date),
+      time_slot: selected.data.time_slot,
+      age_group: selected.data.age_group,
+      child_notes: walkInNotes.trim() || null,
+    }).select().single()
+    if (!error && data) {
+      setTrialSignups(prev => [...prev, data])
+      setSelected(prev => ({ ...prev, data: { ...prev.data, signups: [...prev.data.signups, data] } }))
+      setWalkInName(''); setWalkInNotes('')
+    }
+    setAddingWalkIn(false)
   }
 
   async function openAdminEvent(ev, date) {
@@ -1572,20 +1604,56 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     {signups.map(s => {
                       const present = s.attended
                       return (
-                        <button key={s.id} onClick={() => toggleTrialAttendance(s.id)} disabled={savingTrialAttendance} style={{
-                          display: 'flex', alignItems: 'center', gap: '12px',
+                        <div key={s.id} style={{
                           background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#fafafa',
                           border: `2px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
-                          borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                          borderRadius: '12px', padding: '10px 14px',
                         }}>
-                          <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{s.full_name}</div>
-                            <div style={{ fontSize: '12px', color: '#888', marginTop: '1px' }}>{s.phone}{s.child_notes ? ` · ${s.child_notes}` : ''}</div>
-                          </div>
-                        </button>
+                          <button onClick={() => toggleTrialAttendance(s.id)} disabled={savingTrialAttendance} style={{
+                            display: 'flex', alignItems: 'center', gap: '12px', width: '100%',
+                            background: 'none', border: 'none', cursor: 'pointer', textAlign: 'right', padding: 0,
+                          }}>
+                            <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{s.full_name}</div>
+                              <div style={{ fontSize: '12px', color: '#888', marginTop: '1px' }}>{s.phone}{s.child_notes ? ` · ${s.child_notes}` : ''}</div>
+                            </div>
+                          </button>
+                          <input
+                            defaultValue={s.attendance_note || ''}
+                            onBlur={e => { if (e.target.value !== (s.attendance_note || '')) saveTrialAttendanceNote(s.id, e.target.value) }}
+                            placeholder="הערה (לדוגמה: הגיע באיחור, מעוניין להירשם...)"
+                            style={{ ...inputStyle, fontSize: '12px', padding: '7px 10px', marginTop: '8px' }}
+                          />
+                        </div>
                       )
                     })}
+                  </div>
+                </div>
+
+                {/* Add spontaneous walk-in */}
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף מגיע ספונטני</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input
+                      value={walkInName}
+                      onChange={e => setWalkInName(e.target.value)}
+                      placeholder="שם"
+                      style={{ ...inputStyle, fontSize: '14px' }}
+                    />
+                    <input
+                      value={walkInNotes}
+                      onChange={e => setWalkInNotes(e.target.value)}
+                      placeholder="הערה (למשל כיתה) — אופציונלי"
+                      style={{ ...inputStyle, fontSize: '14px' }}
+                    />
+                    <button onClick={addWalkInTrial} disabled={addingWalkIn || !walkInName.trim()} style={{
+                      background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a',
+                      borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', fontWeight: '700', fontSize: '14px',
+                      opacity: (addingWalkIn || !walkInName.trim()) ? 0.6 : 1,
+                    }}>
+                      {addingWalkIn ? 'מוסיף...' : '+ הוסף לרשימה'}
+                    </button>
                   </div>
                 </div>
               </div>
