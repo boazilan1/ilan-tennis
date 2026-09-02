@@ -891,6 +891,8 @@ function CalendarTab() {
   const [activities, setActivities] = useState([])
   const [adminEvents, setAdminEvents] = useState([])
   const [allPlayers, setAllPlayers] = useState([])
+  const [trialSignups, setTrialSignups] = useState([])
+  const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
   const [selected, setSelected] = useState(null)
   const [enrollments, setEnrollments] = useState([])
   const [attendance, setAttendance] = useState({})
@@ -919,14 +921,16 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const [actRes, evRes, playerRes] = await Promise.all([
+    const [actRes, evRes, playerRes, trialRes] = await Promise.all([
       supabase.from('activities').select('*'),
       supabase.from('admin_events').select('*').order('created_at'),
       supabase.from('players').select('id, name, birth_year, user_id').order('name'),
+      supabase.from('trial_signups').select('*').order('time_slot'),
     ])
     if (actRes.data) setActivities(actRes.data)
     if (evRes.data) setAdminEvents(evRes.data)
     if (playerRes.data) setAllPlayers(playerRes.data)
+    if (trialRes.data) setTrialSignups(trialRes.data)
   }
 
   function formatDate(date) { return date.toISOString().split('T')[0] }
@@ -997,6 +1001,34 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     if (attendRes.data) { const map = {}; attendRes.data.forEach(r => { map[r.player_id] = r.present }); setAttendance(map) }
     if (sessionRes.data) setActivitySession({ status: sessionRes.data.status || 'scheduled', notes: sessionRes.data.notes || '' })
     setLoadingSession(false)
+  }
+
+  function getTrialSlotsForDay(date) {
+    const dateStr = formatDate(date)
+    const bySlot = {}
+    trialSignups.filter(t => t.lesson_date === dateStr).forEach(t => {
+      if (!bySlot[t.time_slot]) bySlot[t.time_slot] = { time_slot: t.time_slot, age_group: t.age_group, signups: [] }
+      bySlot[t.time_slot].signups.push(t)
+    })
+    return Object.values(bySlot).sort((a, b) => a.time_slot.localeCompare(b.time_slot))
+  }
+
+  function openTrialSlot(slot, date) {
+    setSelected({ type: 'trial', data: slot, date })
+    setShowEventForm(false); setShowDeleteOptions(false)
+  }
+
+  async function toggleTrialAttendance(signupId) {
+    const signup = selected.data.signups.find(s => s.id === signupId)
+    const newVal = signup.attended === true ? false : true
+    setSelected(prev => ({
+      ...prev,
+      data: { ...prev.data, signups: prev.data.signups.map(s => s.id === signupId ? { ...s, attended: newVal } : s) },
+    }))
+    setTrialSignups(prev => prev.map(s => s.id === signupId ? { ...s, attended: newVal } : s))
+    setSavingTrialAttendance(true)
+    await supabase.from('trial_signups').update({ attended: newVal }).eq('id', signupId)
+    setSavingTrialAttendance(false)
   }
 
   async function openAdminEvent(ev, date) {
@@ -1267,8 +1299,9 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               {weekDays.map(({ key, date }) => {
                 const dayActivities = activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(key))
                 const dayEvents = getEventsForDay(key, date)
+                const dayTrials = getTrialSlotsForDay(date)
                 const today = isToday(date)
-                const hasItems = dayActivities.length > 0 || dayEvents.length > 0
+                const hasItems = dayActivities.length > 0 || dayEvents.length > 0 || dayTrials.length > 0
                 return (
                   <div key={key} style={{
                     background: today ? '#f0fdf4' : '#fff',
@@ -1320,6 +1353,21 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                             </button>
                           )
                         })}
+                        {dayTrials.map(slot => {
+                          const isSel = selected?.type === 'trial' && selected.data.time_slot === slot.time_slot && formatDate(selected.date) === formatDate(date)
+                          const attendedCount = slot.signups.filter(s => s.attended === true).length
+                          return (
+                            <button key={slot.time_slot} onClick={() => openTrialSlot(slot, date)} style={{
+                              background: isSel ? '#b45309' : '#fffbeb', color: isSel ? '#fff' : '#b45309',
+                              border: isSel ? 'none' : '1px solid #fde68a',
+                              borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
+                              boxShadow: isSel ? '0 4px 12px rgba(180,83,9,0.3)' : 'none',
+                            }}>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 שיעור ניסיון · {slot.time_slot}</div>
+                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>{attendedCount}/{slot.signups.length} הגיעו</div>
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -1353,7 +1401,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     const dayKey = DAYS_ORDER[date.getDay()]
                     const dayActivities = inMonth ? activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey)) : []
                     const dayEvents = inMonth ? getEventsForDay(dayKey, date) : []
-                    const allItems = [...dayActivities.map(a => ({ type: 'activity', item: a })), ...dayEvents.map(ev => ({ type: 'event', item: ev }))]
+                    const dayTrials = inMonth ? getTrialSlotsForDay(date) : []
+                    const allItems = [
+                      ...dayActivities.map(a => ({ type: 'activity', item: a, id: a.id, label: a.name })),
+                      ...dayEvents.map(ev => ({ type: 'event', item: ev, id: ev.id, label: ev.title })),
+                      ...dayTrials.map(slot => ({ type: 'trial', item: slot, id: slot.time_slot, label: `🎾 ${slot.time_slot}` })),
+                    ]
                     const today = isToday(date)
                     return (
                       <div key={di} style={{
@@ -1364,17 +1417,20 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                       }}>
                         <div style={{ fontSize: '12px', fontWeight: '700', color: today ? '#1a472a' : inMonth ? '#333' : '#ccc', marginBottom: '3px' }}>{date.getDate()}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          {allItems.slice(0, 3).map(({ type, item }) => {
-                            const isSel = selected?.type === type && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
-                            const isAct = type === 'activity'
+                          {allItems.slice(0, 3).map(({ type, item, id, label }) => {
+                            const isSel = selected?.type === type
+                              && (type === 'trial' ? selected.data.time_slot === id : selected.data.id === id)
+                              && formatDate(selected.date) === formatDate(date)
+                            const colors = type === 'activity' ? ['#1a472a', '#f0f7f0'] : type === 'event' ? ['#7c3aed', '#f5f3ff'] : ['#b45309', '#fffbeb']
+                            const onClick = type === 'activity' ? () => openActivity(item, date) : type === 'event' ? () => openAdminEvent(item, date) : () => openTrialSlot(item, date)
                             return (
-                              <button key={item.id} onClick={() => isAct ? openActivity(item, date) : openAdminEvent(item, date)} style={{
-                                background: isSel ? (isAct ? '#1a472a' : '#7c3aed') : (isAct ? '#f0f7f0' : '#f5f3ff'),
-                                color: isSel ? '#fff' : (isAct ? '#1a472a' : '#7c3aed'),
+                              <button key={id} onClick={onClick} style={{
+                                background: isSel ? colors[0] : colors[1],
+                                color: isSel ? '#fff' : colors[0],
                                 border: 'none', borderRadius: '4px', padding: '2px 5px',
                                 fontSize: '10px', cursor: 'pointer', textAlign: 'right',
                                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%',
-                              }}>{item.name || item.title}</button>
+                              }}>{label}</button>
                             )
                           })}
                           {allItems.length > 3 && <div style={{ fontSize: '9px', color: '#bbb', textAlign: 'center' }}>+{allItems.length - 3}</div>}
@@ -1394,16 +1450,19 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       {selected && (
         <div className="side-panel-wrap">
         <div className="side-panel-inner" style={{
-          border: `1px solid ${selected.type === 'event' ? '#ede9fe' : '#e8ece8'}`,
-          boxShadow: `0 8px 30px ${selected.type === 'event' ? 'rgba(124,58,237,0.12)' : 'rgba(26,71,42,0.1)'}`,
+          border: `1px solid ${selected.type === 'event' ? '#ede9fe' : selected.type === 'trial' ? '#fde68a' : '#e8ece8'}`,
+          boxShadow: `0 8px 30px ${selected.type === 'event' ? 'rgba(124,58,237,0.12)' : selected.type === 'trial' ? 'rgba(180,83,9,0.12)' : 'rgba(26,71,42,0.1)'}`,
         }}>
         <div className="panel-handle" />
           {/* Panel header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
             <div>
-              <div style={{ fontWeight: '800', color: selected.type === 'event' ? '#7c3aed' : '#1a472a', fontSize: '17px' }}>
-                {selected.type === 'event' ? selected.data.title : selected.data.name}
+              <div style={{ fontWeight: '800', color: selected.type === 'event' ? '#7c3aed' : selected.type === 'trial' ? '#b45309' : '#1a472a', fontSize: '17px' }}>
+                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.data.name}
               </div>
+              {selected.type === 'trial' && (
+                <div style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>{selected.data.age_group}</div>
+              )}
               <div style={{ fontSize: '13px', color: '#888', marginTop: '3px' }}>
                 {selected.date.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
               </div>
@@ -1497,6 +1556,41 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               </div>
             )
           )}
+
+          {/* ── Trial lesson panel ── */}
+          {selected.type === 'trial' && (() => {
+            const signups = selected.data.signups
+            const attendedCount = signups.filter(s => s.attended === true).length
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '800', color: '#b45309' }}>נוכחות</div>
+                    <div style={{ background: '#dcfce7', color: '#16a34a', borderRadius: '8px', padding: '3px 10px', fontSize: '14px', fontWeight: '700' }}>{attendedCount}/{signups.length}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {signups.map(s => {
+                      const present = s.attended
+                      return (
+                        <button key={s.id} onClick={() => toggleTrialAttendance(s.id)} disabled={savingTrialAttendance} style={{
+                          display: 'flex', alignItems: 'center', gap: '12px',
+                          background: present === true ? '#f0fdf4' : present === false ? '#fef2f2' : '#fafafa',
+                          border: `2px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
+                          borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                        }}>
+                          <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{s.full_name}</div>
+                            <div style={{ fontSize: '12px', color: '#888', marginTop: '1px' }}>{s.phone}{s.child_notes ? ` · ${s.child_notes}` : ''}</div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ── Event panel ── */}
           {selected.type === 'event' && (
