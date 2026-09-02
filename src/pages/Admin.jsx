@@ -8,6 +8,7 @@ import AdminContact from './AdminContact'
 import AdminPages from './AdminPages'
 import AdminSettings from './AdminSettings'
 import AdminLocations from './AdminLocations'
+import AdminTrialSignups from './AdminTrialSignups'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -57,6 +58,7 @@ export default function Admin() {
     { key: 'locations',   label: 'מיקומים' },
     { key: 'calendar',    label: 'יומן' },
     { key: 'tournaments', label: 'תחרויות' },
+    { key: 'trial',       label: 'שיעורי ניסיון' },
     { key: 'sections',    label: 'תוכן' },
     { key: 'pages',       label: 'דפים' },
     { key: 'contact',     label: 'פניות' },
@@ -102,6 +104,7 @@ export default function Admin() {
         {tab === 'locations'   && <AdminLocations />}
         {tab === 'calendar'    && <CalendarTab />}
         {tab === 'tournaments' && <TournamentsTab />}
+        {tab === 'trial'       && <AdminTrialSignups />}
         {tab === 'sections'    && <AdminSections />}
         {tab === 'pages'       && <AdminPages />}
         {tab === 'contact'     && <AdminContact />}
