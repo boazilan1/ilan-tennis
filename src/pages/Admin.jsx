@@ -1044,6 +1044,13 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     await supabase.from('trial_signups').update({ attendance_note: note || null }).eq('id', signupId)
   }
 
+  async function deleteTrialSignup(signupId, name) {
+    if (!window.confirm(`להסיר את ${name || 'הנרשם/ת'} משיעור הניסיון?`)) return
+    setTrialSignups(prev => prev.filter(s => s.id !== signupId))
+    setSelected(prev => ({ ...prev, data: { ...prev.data, signups: prev.data.signups.filter(s => s.id !== signupId) } }))
+    await supabase.from('trial_signups').delete().eq('id', signupId)
+  }
+
   async function addWalkInTrial() {
     if (!walkInName.trim()) return
     setAddingWalkIn(true)
@@ -1609,16 +1616,22 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                           border: `2px solid ${present === true ? '#bbf7d0' : present === false ? '#fecaca' : '#eee'}`,
                           borderRadius: '12px', padding: '10px 14px',
                         }}>
-                          <button onClick={() => toggleTrialAttendance(s.id)} disabled={savingTrialAttendance} style={{
-                            display: 'flex', alignItems: 'center', gap: '12px', width: '100%',
-                            background: 'none', border: 'none', cursor: 'pointer', textAlign: 'right', padding: 0,
-                          }}>
-                            <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{s.full_name}</div>
-                              <div style={{ fontSize: '12px', color: '#888', marginTop: '1px' }}>{s.phone}{s.child_notes ? ` · ${s.child_notes}` : ''}</div>
-                            </div>
-                          </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <button onClick={() => toggleTrialAttendance(s.id)} disabled={savingTrialAttendance} style={{
+                              display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0,
+                              background: 'none', border: 'none', cursor: 'pointer', textAlign: 'right', padding: 0,
+                            }}>
+                              <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{s.full_name}</div>
+                                <div style={{ fontSize: '12px', color: '#888', marginTop: '1px' }}>{s.phone}{s.child_notes ? ` · ${s.child_notes}` : ''}</div>
+                              </div>
+                            </button>
+                            <button onClick={() => deleteTrialSignup(s.id, s.full_name)} title="הסר מהשיעור" style={{
+                              background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: '16px',
+                              padding: '4px 6px', flexShrink: 0,
+                            }}>✕</button>
+                          </div>
                           <input
                             defaultValue={s.attendance_note || ''}
                             onBlur={e => { if (e.target.value !== (s.attendance_note || '')) saveTrialAttendanceNote(s.id, e.target.value) }}
