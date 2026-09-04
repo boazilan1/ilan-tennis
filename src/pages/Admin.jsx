@@ -893,6 +893,7 @@ function CalendarTab() {
   const [allPlayers, setAllPlayers] = useState([])
   const [trialSignups, setTrialSignups] = useState([])
   const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
+  const [showAddPerson, setShowAddPerson] = useState(false)
   const [walkInName, setWalkInName] = useState('')
   const [walkInNotes, setWalkInNotes] = useState('')
   const [addingWalkIn, setAddingWalkIn] = useState(false)
@@ -937,6 +938,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   }
 
   function formatDate(date) { return date.toISOString().split('T')[0] }
+
+  function startMinutes(timeStr) {
+    const m = timeStr?.match(/(\d{1,2}):(\d{2})/)
+    return m ? Number(m[1]) * 60 + Number(m[2]) : Infinity
+  }
   function isToday(date) { return formatDate(date) === formatDate(new Date()) }
 
   function getWeekDays() {
@@ -991,7 +997,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
   async function openActivity(activity, date) {
     setSelected({ type: 'activity', data: activity, date })
-    setShowEventForm(false); setAddPlayerSearch('')
+    setShowEventForm(false); setAddPlayerSearch(''); setShowAddPerson(false)
     setLoadingSession(true); setEnrollments([]); setAttendance({})
     setActivitySession({ status: 'scheduled', notes: '' })
     const dateStr = formatDate(date)
@@ -1018,7 +1024,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
   function openTrialSlot(slot, date) {
     setSelected({ type: 'trial', data: slot, date })
-    setShowEventForm(false); setShowDeleteOptions(false)
+    setShowEventForm(false); setShowDeleteOptions(false); setShowAddPerson(false)
     setWalkInName(''); setWalkInNotes('')
   }
 
@@ -1072,7 +1078,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
   async function openAdminEvent(ev, date) {
     setSelected({ type: 'event', data: ev, date })
-    setShowEventForm(false); setShowDeleteOptions(false)
+    setShowEventForm(false); setShowDeleteOptions(false); setShowAddPerson(false)
     setEventNotes(ev.notes || ''); setEventStatus(ev.status || 'scheduled')
     setLoadingEventPlayers(true)
     const [rosterRes, attendRes] = await Promise.all([
@@ -1339,8 +1345,13 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 const dayActivities = activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(key))
                 const dayEvents = getEventsForDay(key, date)
                 const dayTrials = getTrialSlotsForDay(date)
+                const dayItems = [
+                  ...dayActivities.map(item => ({ type: 'activity', item, sortKey: startMinutes(item.time) })),
+                  ...dayEvents.map(item => ({ type: 'event', item, sortKey: startMinutes(item.time) })),
+                  ...dayTrials.map(item => ({ type: 'trial', item, sortKey: startMinutes(item.time_slot) })),
+                ].sort((a, b) => a.sortKey - b.sortKey)
                 const today = isToday(date)
-                const hasItems = dayActivities.length > 0 || dayEvents.length > 0 || dayTrials.length > 0
+                const hasItems = dayItems.length > 0
                 return (
                   <div key={key} style={{
                     background: today ? '#f0fdf4' : '#fff',
@@ -1360,50 +1371,50 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     </div>
                     {hasItems && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {dayActivities.map(act => {
-                          const isSel = selected?.type === 'activity' && selected.data.id === act.id && formatDate(selected.date) === formatDate(date)
+                        {dayItems.map(({ type, item }) => {
+                          if (type === 'activity') {
+                            const isSel = selected?.type === 'activity' && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
+                            return (
+                              <button key={`a-${item.id}`} onClick={() => openActivity(item, date)} style={{
+                                background: isSel ? '#1a472a' : '#f0f7f0', color: isSel ? '#fff' : '#1a472a',
+                                border: isSel ? 'none' : '1px solid #c5ddc5',
+                                borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
+                                boxShadow: isSel ? '0 4px 12px rgba(26,71,42,0.25)' : 'none',
+                              }}>
+                                <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.name}</div>
+                                {item.time && <div style={{ fontSize: '11px', opacity: 0.75, marginTop: '1px' }}>🕐 {item.time}</div>}
+                              </button>
+                            )
+                          }
+                          if (type === 'event') {
+                            const isSel = selected?.type === 'event' && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
+                            const st = STATUS_EVENT[item.status] || STATUS_EVENT.scheduled
+                            return (
+                              <button key={`e-${item.id}`} onClick={() => openAdminEvent(item, date)} style={{
+                                background: isSel ? '#7c3aed' : '#f5f3ff', color: isSel ? '#fff' : '#7c3aed',
+                                border: isSel ? 'none' : '1px solid #ddd9fe',
+                                borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
+                                boxShadow: isSel ? '0 4px 12px rgba(124,58,237,0.3)' : 'none',
+                              }}>
+                                <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.title}</div>
+                                <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>
+                                  {item.time && `🕐 ${item.time}  `}
+                                  <span style={{ color: isSel ? 'rgba(255,255,255,0.85)' : st.color }}>{st.label}</span>
+                                </div>
+                              </button>
+                            )
+                          }
+                          const isSel = selected?.type === 'trial' && selected.data.time_slot === item.time_slot && formatDate(selected.date) === formatDate(date)
+                          const attendedCount = item.signups.filter(s => s.attended === true).length
                           return (
-                            <button key={act.id} onClick={() => openActivity(act, date)} style={{
-                              background: isSel ? '#1a472a' : '#f0f7f0', color: isSel ? '#fff' : '#1a472a',
-                              border: isSel ? 'none' : '1px solid #c5ddc5',
-                              borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
-                              boxShadow: isSel ? '0 4px 12px rgba(26,71,42,0.25)' : 'none',
-                            }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700' }}>{act.name}</div>
-                              {act.time && <div style={{ fontSize: '11px', opacity: 0.75, marginTop: '1px' }}>🕐 {act.time}</div>}
-                            </button>
-                          )
-                        })}
-                        {dayEvents.map(ev => {
-                          const isSel = selected?.type === 'event' && selected.data.id === ev.id && formatDate(selected.date) === formatDate(date)
-                          const st = STATUS_EVENT[ev.status] || STATUS_EVENT.scheduled
-                          return (
-                            <button key={ev.id} onClick={() => openAdminEvent(ev, date)} style={{
-                              background: isSel ? '#7c3aed' : '#f5f3ff', color: isSel ? '#fff' : '#7c3aed',
-                              border: isSel ? 'none' : '1px solid #ddd9fe',
-                              borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
-                              boxShadow: isSel ? '0 4px 12px rgba(124,58,237,0.3)' : 'none',
-                            }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700' }}>{ev.title}</div>
-                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>
-                                {ev.time && `🕐 ${ev.time}  `}
-                                <span style={{ color: isSel ? 'rgba(255,255,255,0.85)' : st.color }}>{st.label}</span>
-                              </div>
-                            </button>
-                          )
-                        })}
-                        {dayTrials.map(slot => {
-                          const isSel = selected?.type === 'trial' && selected.data.time_slot === slot.time_slot && formatDate(selected.date) === formatDate(date)
-                          const attendedCount = slot.signups.filter(s => s.attended === true).length
-                          return (
-                            <button key={slot.time_slot} onClick={() => openTrialSlot(slot, date)} style={{
+                            <button key={`t-${item.time_slot}`} onClick={() => openTrialSlot(item, date)} style={{
                               background: isSel ? '#b45309' : '#fffbeb', color: isSel ? '#fff' : '#b45309',
                               border: isSel ? 'none' : '1px solid #fde68a',
                               borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
                               boxShadow: isSel ? '0 4px 12px rgba(180,83,9,0.3)' : 'none',
                             }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 שיעור ניסיון · {slot.time_slot}</div>
-                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>{attendedCount}/{slot.signups.length} הגיעו</div>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 שיעור ניסיון · {item.time_slot}</div>
+                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>{attendedCount}/{item.signups.length} הגיעו</div>
                             </button>
                           )
                         })}
@@ -1442,10 +1453,10 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     const dayEvents = inMonth ? getEventsForDay(dayKey, date) : []
                     const dayTrials = inMonth ? getTrialSlotsForDay(date) : []
                     const allItems = [
-                      ...dayActivities.map(a => ({ type: 'activity', item: a, id: a.id, label: a.name })),
-                      ...dayEvents.map(ev => ({ type: 'event', item: ev, id: ev.id, label: ev.title })),
-                      ...dayTrials.map(slot => ({ type: 'trial', item: slot, id: slot.time_slot, label: `🎾 ${slot.time_slot}` })),
-                    ]
+                      ...dayActivities.map(a => ({ type: 'activity', item: a, id: a.id, label: a.name, sortKey: startMinutes(a.time) })),
+                      ...dayEvents.map(ev => ({ type: 'event', item: ev, id: ev.id, label: ev.title, sortKey: startMinutes(ev.time) })),
+                      ...dayTrials.map(slot => ({ type: 'trial', item: slot, id: slot.time_slot, label: `🎾 ${slot.time_slot}`, sortKey: startMinutes(slot.time_slot) })),
+                    ].sort((a, b) => a.sortKey - b.sortKey)
                     const today = isToday(date)
                     return (
                       <div key={di} style={{
@@ -1550,25 +1561,34 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                   )}
                 </div>
 
-                {/* 2. Add player from full list — always visible */}
+                {/* 2. Add player from full list — collapsed behind a toggle */}
                 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף מתאמן לחוג</div>
-                  <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} />
-                  <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
-                      <button key={p.id} onClick={() => addPlayerToActivity(p.id)} disabled={addingPlayer} style={{
-                        display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f7f0', border: '1px solid #c5ddc5',
-                        borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%', opacity: addingPlayer ? 0.6 : 1,
-                        color: '#1a472a', fontWeight: '600', fontSize: '14px',
-                      }}>
-                        <span>+</span>
-                        <span>{p.name}</span>
-                      </button>
-                    ))}
-                    {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).length === 0 && (
-                      <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כל המתאמנים כבר רשומים</p>
-                    )}
-                  </div>
+                  <button onClick={() => setShowAddPerson(v => !v)} style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: '13px', fontWeight: '700', color: '#555', padding: 0, marginBottom: showAddPerson ? '8px' : 0,
+                  }}>
+                    <span>{showAddPerson ? '−' : '+'}</span> הוסף מתאמן לחוג
+                  </button>
+                  {showAddPerson && (
+                    <>
+                      <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} autoFocus />
+                      <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
+                          <button key={p.id} onClick={() => addPlayerToActivity(p.id)} disabled={addingPlayer} style={{
+                            display: 'flex', alignItems: 'center', gap: '8px', background: '#f0f7f0', border: '1px solid #c5ddc5',
+                            borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%', opacity: addingPlayer ? 0.6 : 1,
+                            color: '#1a472a', fontWeight: '600', fontSize: '14px',
+                          }}>
+                            <span>+</span>
+                            <span>{p.name}</span>
+                          </button>
+                        ))}
+                        {allPlayers.filter(p => !enrollments.some(en => en.player_id === p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).length === 0 && (
+                          <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כל המתאמנים כבר רשומים</p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* 3. Session details — last */}
@@ -1646,13 +1666,20 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
                 {/* Add spontaneous walk-in */}
                 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף מגיע ספונטני</div>
+                  <button onClick={() => setShowAddPerson(v => !v)} style={{
+                    display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: '13px', fontWeight: '700', color: '#555', padding: 0, marginBottom: showAddPerson ? '8px' : 0,
+                  }}>
+                    <span>{showAddPerson ? '−' : '+'}</span> הוסף מגיע ספונטני
+                  </button>
+                  {showAddPerson && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <input
                       value={walkInName}
                       onChange={e => setWalkInName(e.target.value)}
                       placeholder="שם"
                       style={{ ...inputStyle, fontSize: '14px' }}
+                      autoFocus
                     />
                     <input
                       value={walkInNotes}
@@ -1668,6 +1695,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                       {addingWalkIn ? 'מוסיף...' : '+ הוסף לרשימה'}
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
             )
@@ -1714,27 +1742,36 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 })()}
               </div>
 
-              {/* 2. Add to roster from full list — always visible */}
+              {/* 2. Add to roster from full list — collapsed behind a toggle */}
               <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
-                <div style={{ fontSize: '13px', fontWeight: '700', color: '#555', marginBottom: '8px' }}>+ הוסף לרשימת האירוע</div>
-                <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} />
-                <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {allPlayers.filter(p => !eventRoster.has(p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
-                    <button key={p.id} onClick={async () => {
-                      await supabase.from('admin_event_roster').insert({ event_id: selected.data.id, player_id: p.id })
-                      setEventRoster(prev => new Set([...prev, p.id]))
-                    }} style={{
-                      display: 'flex', alignItems: 'center', gap: '8px', background: '#f5f3ff', border: '1px solid #ddd9fe',
-                      borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
-                      color: '#7c3aed', fontWeight: '600', fontSize: '14px',
-                    }}>
-                      <span>+</span><span>{p.name}</span>
-                    </button>
-                  ))}
-                  {allPlayers.filter(p => !eventRoster.has(p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).length === 0 && (
-                    <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כולם כבר ברשימה</p>
-                  )}
-                </div>
+                <button onClick={() => setShowAddPerson(v => !v)} style={{
+                  display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: '13px', fontWeight: '700', color: '#555', padding: 0, marginBottom: showAddPerson ? '8px' : 0,
+                }}>
+                  <span>{showAddPerson ? '−' : '+'}</span> הוסף לרשימת האירוע
+                </button>
+                {showAddPerson && (
+                  <>
+                    <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} autoFocus />
+                    <div style={{ maxHeight: '160px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {allPlayers.filter(p => !eventRoster.has(p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).map(p => (
+                        <button key={p.id} onClick={async () => {
+                          await supabase.from('admin_event_roster').insert({ event_id: selected.data.id, player_id: p.id })
+                          setEventRoster(prev => new Set([...prev, p.id]))
+                        }} style={{
+                          display: 'flex', alignItems: 'center', gap: '8px', background: '#f5f3ff', border: '1px solid #ddd9fe',
+                          borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                          color: '#7c3aed', fontWeight: '600', fontSize: '14px',
+                        }}>
+                          <span>+</span><span>{p.name}</span>
+                        </button>
+                      ))}
+                      {allPlayers.filter(p => !eventRoster.has(p.id) && (!addPlayerSearch || p.name.includes(addPlayerSearch))).length === 0 && (
+                        <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>כולם כבר ברשימה</p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* 3. Event details — last */}
