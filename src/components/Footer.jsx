@@ -22,6 +22,9 @@ export default function Footer() {
     })
   }, [])
 
+  const policyItems = items.filter(item => item.url?.startsWith('/page/'))
+  const contactItems = items.filter(item => !item.url?.startsWith('/page/'))
+
   return (
     <footer style={{
       background: '#1a472a', color: 'rgba(255,255,255,0.8)',
@@ -33,9 +36,9 @@ export default function Footer() {
       </p>
       {subtitle && <p style={{ margin: '0 0 12px', opacity: 0.75, fontSize: '13px' }}>{subtitle}</p>}
 
-      {items.length > 0 && (
+      {contactItems.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px 24px', margin: '0 0 12px' }}>
-          {items.map(item => (
+          {contactItems.map(item => (
             <span key={item.id} style={{ fontSize: '13px' }}>
               {item.url ? (
                 <a href={item.url} target="_blank" rel="noreferrer" style={{ color: 'rgba(255,255,255,0.75)', textDecoration: 'none' }}>
@@ -52,6 +55,14 @@ export default function Footer() {
       )}
 
       <p style={{ margin: 0, opacity: 0.4, fontSize: '11px' }}>© {new Date().getFullYear()} כל הזכויות שמורות</p>
+
+      {policyItems.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '6px 16px', marginTop: '10px' }}>
+          {policyItems.map(item => (
+            <a key={item.id} href={item.url} style={{ color: 'rgba(255,255,255,0.45)', textDecoration: 'none', fontSize: '11px' }}>{item.label}</a>
+          ))}
+        </div>
+      )}
     </footer>
   )
 }
