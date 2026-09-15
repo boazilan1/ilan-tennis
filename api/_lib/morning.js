@@ -92,4 +92,12 @@ export function searchToken(externalKey) {
   return morningFetch('/payments/tokens/search', { externalKey })
 }
 
+export function createClient({ name, email, phone }) {
+  return morningFetch('/clients', {
+    name,
+    emails: email ? [email] : [],
+    phone: phone || '',
+  })
+}
+
 export const MORNING_ENV = ENV

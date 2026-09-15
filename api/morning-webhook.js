@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
     const { data: subscription } = await supabase
       .from('billing_subscriptions')
-      .select('id, monthly_amount')
+      .select('id, monthly_amount, user_id')
       .eq('enrollment_id', enrollmentId)
       .single()
 
@@ -69,7 +69,15 @@ export default async function handler(req, res) {
       return
     }
 
-    const recipientId = event.recipient?.id
+    // Prefer our own cached client id (set when the payment form was
+    // created) over the webhook's own recipient.id — it's the id the token
+    // was actually saved against.
+    const { data: payerProfile } = await supabase
+      .from('profiles')
+      .select('morning_client_id, email')
+      .eq('id', subscription.user_id)
+      .single()
+    const recipientId = payerProfile?.morning_client_id || event.recipient?.id
 
     let morningTokenId = null
     if (recipientId) {
@@ -99,17 +107,14 @@ export default async function handler(req, res) {
       .select('user_id, player:players(name), activity:activities(name)')
       .eq('id', enrollmentId)
       .single()
-    const { data: profile } = enrollment
-      ? await supabase.from('profiles').select('email').eq('id', enrollment.user_id).single()
-      : { data: null }
 
-    if (profile?.email) {
+    if (payerProfile?.email) {
       fetch(`${req.headers.origin || `https://${req.headers.host}`}/api/notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: 'payment_confirmed',
-          registrantEmail: profile.email,
+          registrantEmail: payerProfile.email,
           playerName: enrollment.player?.name || '',
           activityName: enrollment.activity?.name || '',
         }),

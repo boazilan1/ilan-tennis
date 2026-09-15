@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from './_lib/supabaseAdmin.js'
-import { createPaymentForm } from './_lib/morning.js'
+import { createPaymentForm, createClient } from './_lib/morning.js'
 import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../src/lib/billing.js'
 
 export default async function handler(req, res) {
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, phone, email')
+      .select('full_name, phone, email, morning_client_id')
       .eq('id', enrollment.user_id)
       .single()
 
@@ -40,10 +40,26 @@ export default async function handler(req, res) {
 
     const origin = req.headers.origin || `https://${req.headers.host}`
 
+    // A payment tied only to an inline/ad-hoc client (no client.id) does not
+    // reliably produce a token we can find afterward via /payments/tokens/search
+    // — a real, persistent Morning client is required for that. Create one once
+    // per user and cache its id.
+    let morningClientId = profile?.morning_client_id || null
+    if (!morningClientId) {
+      const newClient = await createClient({
+        name: profile?.full_name || 'תלמיד/ה',
+        email: profile?.email,
+        phone: profile?.phone,
+      })
+      morningClientId = newClient.id
+      await supabase.from('profiles').update({ morning_client_id: morningClientId }).eq('id', enrollment.user_id)
+    }
+
     const form = await createPaymentForm({
       amount: plan.immediateCharge,
       description: `הרשמה לחוג ${activity.name} — ${enrollment.player?.name || ''}`,
       client: {
+        id: morningClientId,
         name: profile?.full_name || 'תלמיד/ה',
         emails: profile?.email ? [profile.email] : [],
         phone: profile?.phone || '',
