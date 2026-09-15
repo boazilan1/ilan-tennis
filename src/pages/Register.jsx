@@ -53,6 +53,7 @@ export default function Register() {
   const [signatureData, setSignatureData] = useState('')
   const [registrationPaused, setRegistrationPaused] = useState(false)
   const [pausedMessage, setPausedMessage] = useState('')
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   useEffect(() => {
     supabase.from('site_settings').select('key, value').in('key', ['register_terms_text', 'register_terms_file_url', 'registration_paused', 'registration_paused_message'])
@@ -63,10 +64,12 @@ export default function Register() {
           if (r.key === 'registration_paused') setRegistrationPaused(r.value === 'true')
           if (r.key === 'registration_paused_message') setPausedMessage(r.value || '')
         })
+        setSettingsLoaded(true)
       })
   }, [])
 
   useEffect(() => {
+    if (!settingsLoaded || registrationPaused) return
     if (authLoading) return
     if (!user) {
       navigate('/login')
@@ -96,7 +99,7 @@ export default function Register() {
       setLoading(false)
     }
     fetchData()
-  }, [user, authLoading, activityId, navigate])
+  }, [user, authLoading, activityId, navigate, registrationPaused, settingsLoaded])
 
   async function handleSubmit(e) {
     e.preventDefault()
