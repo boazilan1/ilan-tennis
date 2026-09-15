@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import SignaturePad from '../components/SignaturePad'
+import { computeBillingPlan, getActivityDaysOfWeek } from '../lib/billing'
 
 const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לחוג, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
 
@@ -283,6 +284,25 @@ export default function Register() {
         <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(activity)} בשעה {activity.time}</p>
         <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{activity.price} לחודש</p>
       </div>
+
+      {/* פירוט תשלום */}
+      {(() => {
+        const days = getActivityDaysOfWeek(activity)
+        if (!days.length || !activity.price) return null
+        const plan = computeBillingPlan(new Date(), days, Number(activity.price))
+        return (
+          <div style={{ background: '#fff', border: '1px solid #e0e8e0', borderRadius: '10px', padding: '16px', marginBottom: '28px', fontSize: '13px', color: '#444', lineHeight: 1.7 }}>
+            <div style={{ fontWeight: 'bold', color: '#1a472a', marginBottom: '6px' }}>פירוט תשלום</div>
+            <p style={{ margin: '2px 0' }}>
+              עכשיו: <strong>₪{plan.immediateCharge}</strong> — עבור {plan.remainingLessons} האימונים שנותרו ב{plan.currentMonthLabel}
+              {plan.extraMonthCharged && ` + חודש ${plan.extraMonthLabel} מלא מראש (מועד החיוב הקבוע הקרוב כבר עבר החודש)`}.
+            </p>
+            <p style={{ margin: '2px 0' }}>
+              החל מהחיוב ב-{plan.standingOrderFirstDateLabel}: הוראת קבע חודשית של ₪{plan.monthlyPrice} (מכסה את {plan.standingOrderCoversLabel} ואילך).
+            </p>
+          </div>
+        )
+      })()}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
