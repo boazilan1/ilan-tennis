@@ -47,7 +47,7 @@ export default function LocationPage({ prefix, locationName, defaults, externalD
         setS(prev => ({ ...prev, ...map }))
       }
       if (locationRes.data) {
-        const { data: activitiesData } = await supabase.from('activities').select('*').eq('location_id', locationRes.data.id).order('time')
+        const { data: activitiesData } = await supabase.from('activities').select('*').eq('location_id', locationRes.data.id).is('parent_activity_id', null).order('time')
         if (activitiesData) setSlots(activitiesData)
       }
       setLoading(false)

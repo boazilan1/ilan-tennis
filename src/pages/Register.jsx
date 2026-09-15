@@ -33,6 +33,9 @@ export default function Register() {
   const [allActivities, setAllActivities] = useState([])
   const [locations, setLocations] = useState([])
   const [activity, setActivity] = useState(null)
+  const [variants, setVariants] = useState([])
+  const [track, setTrack] = useState('full')
+  const [chosenDay, setChosenDay] = useState('')
   const [players, setPlayers] = useState([])
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [showNewPlayer, setShowNewPlayer] = useState(false)
@@ -67,7 +70,7 @@ export default function Register() {
     }
     if (!activityId) {
       Promise.all([
-        supabase.from('activities').select('*').order('time'),
+        supabase.from('activities').select('*').is('parent_activity_id', null).order('time'),
         supabase.from('locations').select('*').order('sort_order'),
       ]).then(([actRes, locRes]) => {
         if (actRes.data) setAllActivities(actRes.data)
@@ -77,12 +80,15 @@ export default function Register() {
       return
     }
     async function fetchData() {
-      const [activityRes, playersRes] = await Promise.all([
+      const [activityRes, playersRes, variantsRes] = await Promise.all([
         supabase.from('activities').select('*').eq('id', activityId).single(),
         supabase.from('players').select('*').eq('user_id', user.id).order('created_at'),
+        supabase.from('activities').select('*').eq('parent_activity_id', activityId).order('days_of_week'),
       ])
       if (activityRes.data) setActivity(activityRes.data)
       if (playersRes.data) setPlayers(playersRes.data)
+      if (variantsRes.data) setVariants(variantsRes.data)
+      setTrack('full'); setChosenDay('')
       setLoading(false)
     }
     fetchData()
@@ -138,8 +144,14 @@ export default function Register() {
         return
       }
 
+      if (track === 'single' && !chosenDay) {
+        setError('יש לבחור יום')
+        setSubmitting(false)
+        return
+      }
+
       const { data: newEnrollment, error: enrollError } = await supabase
-        .rpc('upsert_registration', { p_player_id: playerId, p_activity_id: activityId, p_signature_name: signatureName.trim(), p_signature_data: signatureData })
+        .rpc('upsert_registration', { p_player_id: playerId, p_activity_id: effectiveActivity.id, p_signature_name: signatureName.trim(), p_signature_data: signatureData })
         .select()
         .single()
 
@@ -166,10 +178,10 @@ export default function Register() {
             registrantEmail: user.email,
             registrantName: profile?.full_name || '',
             playerName,
-            activityName: activity.name,
-            activityDay: formatDays(activity),
-            activityTime: activity.time,
-            price: activity.price,
+            activityName: effectiveActivity.name,
+            activityDay: formatDays(effectiveActivity),
+            activityTime: effectiveActivity.time,
+            price: effectiveActivity.price,
           }),
         })
       } catch (notifyErr) {
@@ -178,10 +190,10 @@ export default function Register() {
 
       // מעבר לתשלום
       sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
-        id: newEnrollment.id, activityName: activity.name,
+        id: newEnrollment.id, activityName: effectiveActivity.name,
       }))
 
-      let paymentUrl = activity.payment_link || 'https://mrng.to/yLXsO2hg8s'
+      let paymentUrl = effectiveActivity.payment_link || 'https://mrng.to/yLXsO2hg8s'
       try {
         const payRes = await fetch('/api/register-payment', {
           method: 'POST',
@@ -291,6 +303,12 @@ export default function Register() {
   const currentYear = new Date().getFullYear()
   const yearOptions = Array.from({ length: currentYear - 1929 }, (_, i) => currentYear - i)
 
+  const canOfferSingleDay = Number(activity.single_day_price) > 0 && variants.length > 0
+  const chosenVariant = track === 'single' && chosenDay
+    ? variants.find(v => (v.days_of_week || [])[0] === chosenDay)
+    : null
+  const effectiveActivity = chosenVariant || activity
+
   return (
     <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '40px auto', padding: '0 20px' }}>
       <h1 style={{ color: '#1a472a', marginBottom: '4px', textAlign: 'center' }}>הרשמה לחוג</h1>
@@ -298,15 +316,59 @@ export default function Register() {
       {/* פרטי החוג */}
       <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
         <h3 style={{ margin: '0 0 8px', color: '#1a472a' }}>{activity.name}</h3>
-        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(activity)} בשעה {activity.time}</p>
-        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{activity.price} לחודש</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(effectiveActivity)} בשעה {activity.time}</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{effectiveActivity.price} לחודש</p>
       </div>
+
+      {/* בחירת מסלול: פעמיים בשבוע או פעם אחת */}
+      {canOfferSingleDay && (
+        <div style={{ background: '#fff', border: '1px solid #e0e8e0', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
+          <label style={{ fontWeight: 'bold', color: '#1a472a', display: 'block', marginBottom: '10px' }}>כמה פעמים בשבוע?</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              background: track === 'full' ? '#e8f5e9' : '#f9f9f9',
+              border: `2px solid ${track === 'full' ? '#1a472a' : '#ddd'}`,
+              borderRadius: '8px', padding: '12px', cursor: 'pointer',
+            }}>
+              <input type="radio" name="track" checked={track === 'full'} onChange={() => { setTrack('full'); setChosenDay('') }} />
+              <span style={{ fontWeight: '500' }}>{formatDays(activity)} (פעמיים בשבוע) — ₪{activity.price} לחודש</span>
+            </label>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              background: track === 'single' ? '#e8f5e9' : '#f9f9f9',
+              border: `2px solid ${track === 'single' ? '#1a472a' : '#ddd'}`,
+              borderRadius: '8px', padding: '12px', cursor: 'pointer',
+            }}>
+              <input type="radio" name="track" checked={track === 'single'} onChange={() => setTrack('single')} />
+              <span style={{ fontWeight: '500' }}>פעם בשבוע — ₪{activity.single_day_price} לחודש</span>
+            </label>
+          </div>
+
+          {track === 'single' && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+              {variants.map(v => {
+                const day = (v.days_of_week || [])[0]
+                return (
+                  <button key={v.id} type="button" onClick={() => setChosenDay(day)} style={{
+                    flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                    background: chosenDay === day ? '#1a472a' : '#f0f7f0',
+                    color: chosenDay === day ? '#fff' : '#1a472a',
+                    border: `1px solid ${chosenDay === day ? '#1a472a' : '#c5ddc5'}`,
+                    fontWeight: '600', fontSize: '14px',
+                  }}>יום {DAYS_HE[day]}</button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* פירוט תשלום */}
       {(() => {
-        const days = getActivityDaysOfWeek(activity)
-        if (!days.length || !activity.price) return null
-        const plan = computeBillingPlan(new Date(), days, Number(activity.price))
+        const days = getActivityDaysOfWeek(effectiveActivity)
+        if (!days.length || !effectiveActivity.price || (track === 'single' && !chosenDay)) return null
+        const plan = computeBillingPlan(new Date(), days, Number(effectiveActivity.price))
         return (
           <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #eef2ee', marginBottom: '28px' }}>
             <div style={{
@@ -519,7 +581,7 @@ export default function Register() {
 
         <button
           type="submit"
-          disabled={submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)}
+          disabled={submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId) || (track === 'single' && !chosenDay)}
           style={{
             background: '#1a472a',
             color: '#fff',
