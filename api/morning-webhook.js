@@ -55,9 +55,9 @@ export default async function handler(req, res) {
     return
   }
 
-  const supabase = getSupabaseAdmin()
-
   try {
+    const supabase = getSupabaseAdmin()
+
     const { data: subscription } = await supabase
       .from('billing_subscriptions')
       .select('id, monthly_amount')

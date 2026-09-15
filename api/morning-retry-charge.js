@@ -19,31 +19,36 @@ export default async function handler(req, res) {
     return
   }
 
-  const supabase = getSupabaseAdmin()
+  try {
+    const supabase = getSupabaseAdmin()
 
-  if (!(await requireAdmin(req, supabase))) {
-    res.status(403).json({ error: 'Forbidden' })
-    return
+    if (!(await requireAdmin(req, supabase))) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+
+    const { subscriptionId } = req.body || {}
+    if (!subscriptionId) {
+      res.status(400).json({ error: 'Missing subscriptionId' })
+      return
+    }
+
+    const { data: sub, error } = await supabase
+      .from('billing_subscriptions')
+      .select('id, enrollment_id, monthly_amount, morning_token_id, next_charge_date, covers_month, failure_count')
+      .eq('id', subscriptionId)
+      .single()
+
+    if (error || !sub) {
+      res.status(404).json({ error: 'Subscription not found' })
+      return
+    }
+
+    const origin = req.headers.origin || `https://${req.headers.host}`
+    const result = await chargeSubscriptionOnce(supabase, sub, origin)
+    res.status(200).json(result)
+  } catch (err) {
+    console.error('morning-retry-charge error', err)
+    res.status(500).json({ error: 'Internal error' })
   }
-
-  const { subscriptionId } = req.body || {}
-  if (!subscriptionId) {
-    res.status(400).json({ error: 'Missing subscriptionId' })
-    return
-  }
-
-  const { data: sub, error } = await supabase
-    .from('billing_subscriptions')
-    .select('id, enrollment_id, monthly_amount, morning_token_id, next_charge_date, covers_month, failure_count')
-    .eq('id', subscriptionId)
-    .single()
-
-  if (error || !sub) {
-    res.status(404).json({ error: 'Subscription not found' })
-    return
-  }
-
-  const origin = req.headers.origin || `https://${req.headers.host}`
-  const result = await chargeSubscriptionOnce(supabase, sub, origin)
-  res.status(200).json(result)
 }

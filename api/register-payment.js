@@ -14,9 +14,9 @@ export default async function handler(req, res) {
     return
   }
 
-  const supabase = getSupabaseAdmin()
-
   try {
+    const supabase = getSupabaseAdmin()
+
     const { data: enrollment, error: enrollError } = await supabase
       .from('enrollments')
       .select('id, user_id, created_at, activity:activities(id, name, price, day_of_week, days_of_week), player:players(name)')

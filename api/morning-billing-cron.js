@@ -12,26 +12,31 @@ export default async function handler(req, res) {
     }
   }
 
-  const supabase = getSupabaseAdmin()
-  const todayIso = formatDateISO(new Date())
-  const origin = req.headers.origin || `https://${req.headers.host}`
+  try {
+    const supabase = getSupabaseAdmin()
+    const todayIso = formatDateISO(new Date())
+    const origin = req.headers.origin || `https://${req.headers.host}`
 
-  const { data: due, error } = await supabase
-    .from('billing_subscriptions')
-    .select('id, enrollment_id, monthly_amount, morning_token_id, next_charge_date, covers_month, failure_count')
-    .eq('status', 'active')
-    .lte('next_charge_date', todayIso)
+    const { data: due, error } = await supabase
+      .from('billing_subscriptions')
+      .select('id, enrollment_id, monthly_amount, morning_token_id, next_charge_date, covers_month, failure_count')
+      .eq('status', 'active')
+      .lte('next_charge_date', todayIso)
 
-  if (error) {
-    console.error('morning-billing-cron: failed to load due subscriptions', error)
-    res.status(500).json({ error: 'Failed to load subscriptions' })
-    return
+    if (error) {
+      console.error('morning-billing-cron: failed to load due subscriptions', error)
+      res.status(500).json({ error: 'Failed to load subscriptions' })
+      return
+    }
+
+    const results = []
+    for (const sub of due || []) {
+      results.push(await chargeSubscriptionOnce(supabase, sub, origin))
+    }
+
+    res.status(200).json({ ok: true, processed: results.length, results })
+  } catch (err) {
+    console.error('morning-billing-cron error', err)
+    res.status(500).json({ error: 'Internal error' })
   }
-
-  const results = []
-  for (const sub of due || []) {
-    results.push(await chargeSubscriptionOnce(supabase, sub, origin))
-  }
-
-  res.status(200).json({ ok: true, processed: results.length, results })
 }
