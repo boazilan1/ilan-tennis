@@ -16,6 +16,14 @@ const TOKEN_URLS = {
 
 const CLIENT_ID = process.env.MORNING_CLIENT_ID || process.env.MORNING_BUSINESS_ID
 const CLIENT_SECRET = process.env.MORNING_CLIENT_SECRET || process.env.MORNING_API_SECRET
+const PLUGIN_ID = process.env.MORNING_PLUGIN_ID
+
+// Document type 400 (קבלה) — matches the docType the connected clearing
+// terminal is actually configured for on this business (confirmed via
+// GET /documents/info?type=320 returning no active plugin, vs type=400
+// returning the connected terminal). Using 320 here fails with
+// errorCode 2600 "לא נמצא מסוף סליקה פעיל".
+const PAID_DOCUMENT_TYPE = 400
 
 let cachedToken = null // { accessToken, expiresAt }
 
@@ -54,12 +62,13 @@ async function morningFetch(path, body) {
 export function createPaymentForm({ amount, description, client, custom, successUrl, failureUrl, notifyUrl }) {
   return morningFetch('/payments/form', {
     description,
-    type: 320, // חשבונית מס / קבלה
+    type: PAID_DOCUMENT_TYPE,
     amount,
     currency: 'ILS',
     vatType: 0,
     lang: 'he',
     maxPayments: 1,
+    ...(PLUGIN_ID ? { pluginId: PLUGIN_ID } : {}),
     client,
     custom,
     successUrl,
@@ -70,7 +79,7 @@ export function createPaymentForm({ amount, description, client, custom, success
 
 export function chargeToken(tokenId, { amount, description }) {
   return morningFetch(`/payments/tokens/${tokenId}/charge`, {
-    type: 320,
+    type: PAID_DOCUMENT_TYPE,
     amount,
     currency: 'ILS',
     vatType: 0,
