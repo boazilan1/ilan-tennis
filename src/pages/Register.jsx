@@ -308,15 +308,61 @@ export default function Register() {
         if (!days.length || !activity.price) return null
         const plan = computeBillingPlan(new Date(), days, Number(activity.price))
         return (
-          <div style={{ background: '#fff', border: '1px solid #e0e8e0', borderRadius: '10px', padding: '16px', marginBottom: '28px', fontSize: '13px', color: '#444', lineHeight: 1.7 }}>
-            <div style={{ fontWeight: 'bold', color: '#1a472a', marginBottom: '6px' }}>פירוט תשלום</div>
-            <p style={{ margin: '2px 0' }}>
-              עכשיו: <strong>₪{plan.immediateCharge}</strong> — עבור {plan.remainingLessons} האימונים שנותרו ב{plan.currentMonthLabel}
-              {plan.extraMonthCharged && ` + חודש ${plan.extraMonthLabel} מלא מראש (מועד החיוב הקבוע הקרוב כבר עבר החודש)`}.
-            </p>
-            <p style={{ margin: '2px 0' }}>
-              החל מהחיוב ב-{plan.standingOrderFirstDateLabel}: הוראת קבע חודשית של ₪{plan.monthlyPrice} (מכסה את {plan.standingOrderCoversLabel} ואילך).
-            </p>
+          <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #eef2ee', marginBottom: '28px' }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 100%)', color: '#fff',
+              padding: '12px 18px', display: 'flex', alignItems: 'center', gap: '8px',
+            }}>
+              <Icon name="lock" size={15} color="#fff" />
+              <span style={{ fontSize: '13px', fontWeight: '700' }}>פירוט תשלום — תשלום מאובטח</span>
+            </div>
+
+            <div style={{ padding: '18px 18px 6px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{
+                  width: '34px', height: '34px', borderRadius: '10px', background: '#e8f5e9',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <Icon name="check" size={17} color="#1a472a" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a472a' }}>
+                    תשלום חד־פעמי עכשיו — ₪{plan.immediateCharge}
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: '#666', marginTop: '2px', lineHeight: 1.6 }}>
+                    עבור {plan.remainingLessons} האימונים שנותרו ב{plan.currentMonthLabel}
+                    {plan.extraMonthCharged && ` + חודש ${plan.extraMonthLabel} מלא מראש (מועד החיוב הקבוע הקרוב כבר עבר החודש)`}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <div style={{
+                  width: '34px', height: '34px', borderRadius: '10px', background: '#fdf4e3',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <Icon name="repeat" size={17} color="#b45309" />
+                </div>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a472a' }}>
+                    הוראת קבע חודשית — ₪{plan.monthlyPrice} לחודש
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: '#666', marginTop: '2px', lineHeight: 1.6 }}>
+                    החיוב האוטומטי הראשון: {plan.standingOrderFirstDateLabel}, עבור {plan.standingOrderCoversLabel} ואילך
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 18px',
+              marginTop: '10px', borderTop: '1px solid #f0f0f0', background: '#fafcfa',
+            }}>
+              <Icon name="lock" size={12} color="#999" />
+              <span style={{ fontSize: '11px', color: '#999' }}>
+                הסליקה מתבצעת דרך Morning — פרטי כרטיס האשראי אינם נשמרים באתר שלנו
+              </span>
+            </div>
           </div>
         )
       })()}
