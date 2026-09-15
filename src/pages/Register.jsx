@@ -414,8 +414,10 @@ export default function Register() {
                     תשלום חד־פעמי עכשיו — ₪{plan.immediateCharge}
                   </div>
                   <div style={{ fontSize: '12.5px', color: '#666', marginTop: '2px', lineHeight: 1.6 }}>
-                    עבור {plan.remainingLessons} האימונים שנותרו ב{plan.currentMonthLabel}
-                    {plan.extraMonthCharged && ` + חודש ${plan.extraMonthLabel} מלא מראש (מועד החיוב הקבוע הקרוב כבר עבר החודש)`}
+                    מכסה רק את <strong>{plan.currentMonthLabel}</strong> — {plan.remainingLessons} האימונים שנותרו החודש
+                    {plan.extraMonthCharged && (
+                      <> + <strong>{plan.extraMonthLabel}</strong> מלא מראש (מועד החיוב הקבוע הקרוב ב-20 כבר עבר החודש, אז נגבה גם את החודש הבא כדי שלא תיווצר "חור" בתשלום)</>
+                    )}
                   </div>
                 </div>
               </div>
@@ -432,7 +434,7 @@ export default function Register() {
                     הוראת קבע חודשית — ₪{plan.monthlyPrice} לחודש
                   </div>
                   <div style={{ fontSize: '12.5px', color: '#666', marginTop: '2px', lineHeight: 1.6 }}>
-                    החיוב האוטומטי הראשון: {plan.standingOrderFirstDateLabel}, עבור {plan.standingOrderCoversLabel} ואילך
+                    החל מ-<strong>{plan.standingOrderFirstDateLabel}</strong> (מכסה את {plan.standingOrderCoversLabel}), ייגבו ₪{plan.monthlyPrice} אוטומטית <strong>ב-20 לכל חודש</strong>, ברציפות עד סוף עונת הפעילות (יולי) — אלא אם תבטלו את ההרשמה קודם לכן.
                   </div>
                 </div>
               </div>
