@@ -51,13 +51,17 @@ export default function Register() {
   const [termsFileUrl, setTermsFileUrl] = useState('')
   const [signatureName, setSignatureName] = useState('')
   const [signatureData, setSignatureData] = useState('')
+  const [registrationPaused, setRegistrationPaused] = useState(false)
+  const [pausedMessage, setPausedMessage] = useState('')
 
   useEffect(() => {
-    supabase.from('site_settings').select('key, value').in('key', ['register_terms_text', 'register_terms_file_url'])
+    supabase.from('site_settings').select('key, value').in('key', ['register_terms_text', 'register_terms_file_url', 'registration_paused', 'registration_paused_message'])
       .then(({ data }) => {
         data?.forEach(r => {
           if (r.key === 'register_terms_text' && r.value) setTermsText(r.value)
           if (r.key === 'register_terms_file_url') setTermsFileUrl(r.value || '')
+          if (r.key === 'registration_paused') setRegistrationPaused(r.value === 'true')
+          if (r.key === 'registration_paused_message') setPausedMessage(r.value || '')
         })
       })
   }, [])
@@ -217,6 +221,20 @@ export default function Register() {
     }
 
     setSubmitting(false)
+  }
+
+  if (registrationPaused) {
+    return (
+      <main style={{ direction: 'rtl', flex: 1, maxWidth: '480px', margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
+        <div style={{ background: '#fff', borderRadius: '16px', padding: '40px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎾</div>
+          <h1 style={{ color: '#1a472a', fontSize: '20px', marginBottom: '10px' }}>ההרשמה סגורה זמנית</h1>
+          <p style={{ color: '#666', lineHeight: 1.7 }}>
+            {pausedMessage || 'אנחנו מבצעים כרגע תחזוקה קצרה במערכת ההרשמה. נחזור לפעילות בקרוב — נא לנסות שוב מאוחר יותר.'}
+          </p>
+        </div>
+      </main>
+    )
   }
 
   if (loading) {
