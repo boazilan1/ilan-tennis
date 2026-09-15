@@ -31,13 +31,13 @@ export default async function handler(req, res) {
   const from = `אילן טניס <${gmailUser}>`
   const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || gmailUser
 
-  const { type, registrantEmail, registrantName, playerName, activityName, activityDay, activityTime, price, phone, lessonDate, timeSlot, ageGroup } = req.body || {}
+  const { type, registrantEmail, registrantName, playerName, activityName, activityDay, activityTime, price, phone, lessonDate, timeSlot, ageGroup, subscriptionId } = req.body || {}
 
   if (!type || !registrantEmail) {
     res.status(400).json({ error: 'Missing required fields' })
     return
   }
-  if (type !== 'trial_signup' && (!playerName || !activityName)) {
+  if (!['trial_signup', 'billing_failed'].includes(type) && (!playerName || !activityName)) {
     res.status(400).json({ error: 'Missing required fields' })
     return
   }
@@ -114,6 +114,19 @@ export default async function handler(req, res) {
           <p>ההרשמה של <strong>${escapeHtml(playerName)}</strong> לחוג <strong>${escapeHtml(activityName)}</strong> אושרה סופית.</p>
           <p>מחכים לראותכם על המגרש!</p>
           <p>בברכה,<br/>אילן טניס</p>
+        </div>
+      `,
+    })
+  } else if (type === 'billing_failed') {
+    messages.push({
+      from,
+      to: registrantEmail,
+      subject: `חיוב הוראת קבע נכשל`,
+      html: `
+        <div dir="rtl" style="font-family: Arial, sans-serif; color: #222;">
+          <h2 style="color: #dc2626;">חיוב הוראת קבע נכשל</h2>
+          <p>החיוב החודשי האוטומטי נכשל מספר פעמים ברציפות עבור מנוי מספר <strong>${escapeHtml(subscriptionId || '')}</strong>, וסומן כ"נכשל" בפאנל הניהול.</p>
+          <p>יש לבדוק את פרטי התשלום מול המתאמן/ת ולטפל ידנית.</p>
         </div>
       `,
     })

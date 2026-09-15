@@ -58,13 +58,14 @@ export function computeBillingPlan(registrationDate, daysOfWeek, monthlyPrice) {
   // Month the prorated payment covers (the registration month itself)
   const currentMonthLabel = monthLabel(year, month)
 
-  let immediateCharge, standingOrderFirstDate, standingOrderCoversLabel, extraMonthCharged, extraMonthLabel
+  let immediateCharge, standingOrderFirstDate, standingOrderCoversDate, standingOrderCoversLabel, extraMonthCharged, extraMonthLabel
 
   if (!registeredAfterCutoff) {
     // Joined before the 20th: pay only for what's left this month.
     // The very next 20th (still this calendar month) bills next month.
     immediateCharge = proratedAmount
     standingOrderFirstDate = new Date(year, month, BILLING_DAY)
+    standingOrderCoversDate = new Date(year, month + 1, 1)
     standingOrderCoversLabel = monthLabel(year, month + 1)
     extraMonthCharged = false
     extraMonthLabel = null
@@ -74,6 +75,7 @@ export function computeBillingPlan(registrationDate, daysOfWeek, monthlyPrice) {
     // a gap. The standing order then resumes on the following 20th.
     immediateCharge = proratedAmount + monthlyPrice
     standingOrderFirstDate = new Date(year, month + 1, BILLING_DAY)
+    standingOrderCoversDate = new Date(year, month + 2, 1)
     standingOrderCoversLabel = monthLabel(year, month + 2)
     extraMonthCharged = true
     extraMonthLabel = monthLabel(year, month + 1)
@@ -93,6 +95,11 @@ export function computeBillingPlan(registrationDate, daysOfWeek, monthlyPrice) {
     monthlyPrice,
     standingOrderFirstDate,
     standingOrderFirstDateLabel: standingOrderFirstDate.toLocaleDateString('he-IL'),
+    standingOrderCoversDate,
     standingOrderCoversLabel,
   }
+}
+
+export function formatDateISO(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }

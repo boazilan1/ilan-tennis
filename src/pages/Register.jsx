@@ -180,7 +180,24 @@ export default function Register() {
       sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
         id: newEnrollment.id, activityName: activity.name,
       }))
-      const paymentUrl = activity.payment_link || 'https://mrng.to/yLXsO2hg8s'
+
+      let paymentUrl = activity.payment_link || 'https://mrng.to/yLXsO2hg8s'
+      try {
+        const payRes = await fetch('/api/register-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enrollmentId: newEnrollment.id }),
+        })
+        if (payRes.ok) {
+          const payData = await payRes.json()
+          if (payData.url) paymentUrl = payData.url
+        } else {
+          console.error('register-payment failed, falling back to static payment link')
+        }
+      } catch (payErr) {
+        console.error('register-payment request failed, falling back to static payment link', payErr)
+      }
+
       window.location.href = paymentUrl
     } catch (err) {
       setError('אירעה שגיאה, נסה שוב')

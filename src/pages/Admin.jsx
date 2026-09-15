@@ -28,6 +28,14 @@ const STATUS_LABELS = {
   cancelled: { label: 'בוטל',         color: '#dc2626', bg: '#fee2e2' },
 }
 
+const SUBSCRIPTION_STATUS_LABELS = {
+  pending_first_payment: { label: 'ממתין לתשלום ראשון', color: '#d97706', bg: '#fef3c7' },
+  active:    { label: 'הוראת קבע פעילה', color: '#16a34a', bg: '#dcfce7' },
+  paused:    { label: 'מושהה',           color: '#888',    bg: '#f3f4f6' },
+  cancelled: { label: 'הוראת קבע בוטלה', color: '#888',    bg: '#f3f4f6' },
+  failed:    { label: 'חיוב נכשל',       color: '#dc2626', bg: '#fee2e2' },
+}
+
 const EMPTY_FORM = {
   name: '', description: '', days_of_week: [], age_group: '', location_id: '',
   time: '', price: '', max_students: '', payment_link: '', image_url: '',
@@ -123,12 +131,13 @@ function EnrollmentsTab() {
   const [filter, setFilter] = useState('all')
   const [dataLoading, setDataLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
+  const [subscriptions, setSubscriptions] = useState({})
 
   useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setDataLoading(true)
-    const [enrollRes, actRes, locRes] = await Promise.all([
+    const [enrollRes, actRes, locRes, subRes] = await Promise.all([
       supabase.from('enrollments').select(`
         id, status, created_at, activity_id, payment_redirect_at,
         player:players(name, birth_year),
@@ -136,6 +145,7 @@ function EnrollmentsTab() {
       `).order('created_at', { ascending: false }),
       supabase.from('activities').select('*'),
       supabase.from('locations').select('*').order('sort_order'),
+      supabase.from('billing_subscriptions').select('*'),
     ])
     if (enrollRes.data) setEnrollments(enrollRes.data)
     if (actRes.data) {
@@ -144,6 +154,11 @@ function EnrollmentsTab() {
       setActivities(map)
     }
     if (locRes.data) setLocations(locRes.data)
+    if (subRes.data) {
+      const map = {}
+      subRes.data.forEach(s => { map[s.enrollment_id] = s })
+      setSubscriptions(map)
+    }
     setDataLoading(false)
   }
 
@@ -173,6 +188,36 @@ function EnrollmentsTab() {
     setUpdating(id)
     await supabase.from('enrollments').delete().eq('id', id)
     setEnrollments(prev => prev.filter(e => e.id !== id))
+    setUpdating(null)
+  }
+
+  async function retrySubscriptionCharge(subscriptionId) {
+    setUpdating(subscriptionId)
+    const { data: { session } } = await supabase.auth.getSession()
+    try {
+      const res = await fetch('/api/morning-retry-charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ subscriptionId }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+    } catch (err) {
+      console.error('retry charge failed', err)
+      alert('הניסיון נכשל, בדוק את פרטי הכרטיס')
+    }
+    await fetchData()
+    setUpdating(null)
+  }
+
+  async function cancelSubscription(subscriptionId) {
+    if (!window.confirm('לבטל את הוראת הקבע? החיוב החודשי האוטומטי יופסק.')) return
+    setUpdating(subscriptionId)
+    await supabase.from('billing_subscriptions').update({ status: 'cancelled' }).eq('id', subscriptionId)
+    setSubscriptions(prev => {
+      const sub = Object.values(prev).find(s => s.id === subscriptionId)
+      if (!sub) return prev
+      return { ...prev, [sub.enrollment_id]: { ...sub, status: 'cancelled' } }
+    })
     setUpdating(null)
   }
 
@@ -273,6 +318,8 @@ function EnrollmentsTab() {
                     {g.items.map(e => {
                       const st = STATUS_LABELS[e.status] || STATUS_LABELS.pending
                       const date = new Date(e.created_at).toLocaleDateString('he-IL')
+                      const sub = subscriptions[e.id]
+                      const subSt = sub ? (SUBSCRIPTION_STATUS_LABELS[sub.status] || null) : null
                       const days = g.activity ? getActivityDaysOfWeek(g.activity) : []
                       const plan = (g.activity && days.length && g.activity.price)
                         ? computeBillingPlan(new Date(e.created_at), days, Number(g.activity.price))
@@ -306,6 +353,12 @@ function EnrollmentsTab() {
                               border: '1px solid #fde68a', borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
                             }}>חזר מתשלום ✓</span>
                           )}
+                          {subSt && (
+                            <span title={sub.status === 'failed' ? `${sub.failure_count} חיובים נכשלו ברציפות` : `חיוב הבא: ₪${sub.monthly_amount} ב-${new Date(sub.next_charge_date).toLocaleDateString('he-IL')}`} style={{
+                              fontSize: '11px', fontWeight: '700', color: subSt.color, background: subSt.bg,
+                              borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
+                            }}>{subSt.label}</span>
+                          )}
                           <StatusPill label={st.label} color={st.color} bg={st.bg} />
                           <div style={{ display: 'flex', gap: '6px' }}>
                             {e.status !== 'active' && (
@@ -316,6 +369,12 @@ function EnrollmentsTab() {
                             )}
                             {e.status === 'cancelled' && (
                               <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e, g.activity, 'pending')} disabled={updating === e.id} />
+                            )}
+                            {sub?.status === 'failed' && (
+                              <ActionBtn label="נסה שוב" color="#16a34a" outline onClick={() => retrySubscriptionCharge(sub.id)} disabled={updating === sub.id} />
+                            )}
+                            {sub && sub.status !== 'cancelled' && (
+                              <ActionBtn label="בטל הוראת קבע" color="#dc2626" outline onClick={() => cancelSubscription(sub.id)} disabled={updating === sub.id} />
                             )}
                             <ActionBtn label="מחק" color="#dc2626" outline onClick={() => deleteEnrollment(e.id, e.player?.name)} disabled={updating === e.id} />
                           </div>
