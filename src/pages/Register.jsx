@@ -250,15 +250,37 @@ export default function Register() {
                       <button key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
                         background: 'white', border: '1px solid #e8ece8', borderRight: '4px solid #1a472a',
                         borderRadius: '14px', padding: '18px 20px', cursor: 'pointer', textAlign: 'right',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '6px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', gap: '10px',
                       }}>
-                        <div style={{ fontWeight: '800', fontSize: '17px', color: '#1a472a' }}>{a.name}</div>
-                        {a.description && <div style={{ fontSize: '13px', color: '#666' }}>{a.description}</div>}
-                        <div style={{ display: 'flex', gap: '14px', fontSize: '13px', color: '#555', flexWrap: 'wrap', marginTop: '2px' }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="calendar" size={14} color="var(--sand)" />{formatDays(a)}</span>
-                          {a.time && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="clock" size={14} color="var(--sand)" />{a.time}</span>}
-                          {a.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="users" size={14} color="var(--sand)" />{a.age_group}</span>}
-                          {a.price && <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}><Icon name="tag" size={14} color="var(--sand)" />₪{a.price} לחודש</span>}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
+                          <div>
+                            <div style={{ fontWeight: '800', fontSize: '17px', color: '#1a472a' }}>{a.name}</div>
+                            {a.description && <div style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>{a.description}</div>}
+                          </div>
+                          {a.price && (
+                            <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                              <div style={{ fontSize: '19px', fontWeight: '800', color: '#1a472a', lineHeight: 1 }}>₪{a.price}</div>
+                              <div style={{ fontSize: '10.5px', color: '#999', marginTop: '2px' }}>לחודש</div>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600',
+                            color: '#1a472a', background: '#e8f5e9', borderRadius: '20px', padding: '6px 12px',
+                          }}>
+                            <Icon name="clock" size={14} color="#1a472a" />
+                            {formatDays(a)}{a.time ? ` · ${a.time}` : ''}
+                          </span>
+                          {a.age_group && (
+                            <span style={{
+                              display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '600',
+                              color: '#b45309', background: '#fdf4e3', borderRadius: '20px', padding: '6px 12px',
+                            }}>
+                              <Icon name="users" size={14} color="#b45309" />
+                              {a.age_group}
+                            </span>
+                          )}
                         </div>
                       </button>
                     ))}
