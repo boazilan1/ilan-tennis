@@ -1065,15 +1065,28 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     })
   }
 
+  // A 2x/week activity and its same-day single-day variant (see the track
+  // picker in Register.jsx) are the same physical session — merge their
+  // rosters/attendance for this specific weekday so admin sees one combined
+  // slot instead of two separate calendar cards to check.
+  function getCombinedActivityIdsForDay(activity, date) {
+    const dayKey = DAYS_ORDER[date.getDay()]
+    const variantIds = activities
+      .filter(a => a.parent_activity_id === activity.id && (a.days_of_week || []).includes(dayKey))
+      .map(a => a.id)
+    return [activity.id, ...variantIds]
+  }
+
   async function openActivity(activity, date) {
-    setSelected({ type: 'activity', data: activity, date })
+    const combinedIds = getCombinedActivityIdsForDay(activity, date)
+    setSelected({ type: 'activity', data: activity, date, combinedIds })
     setShowEventForm(false); setAddPlayerSearch(''); setShowAddPerson(false)
     setLoadingSession(true); setEnrollments([]); setAttendance({})
     setActivitySession({ status: 'scheduled', notes: '' })
     const dateStr = formatDate(date)
     const [enrollRes, attendRes, sessionRes] = await Promise.all([
-      supabase.from('enrollments').select('player_id, player:players(id, name, birth_year)').eq('activity_id', activity.id).eq('status', 'active'),
-      supabase.from('attendance').select('player_id, present').eq('activity_id', activity.id).eq('date', dateStr),
+      supabase.from('enrollments').select('activity_id, player_id, player:players(id, name, birth_year)').in('activity_id', combinedIds).eq('status', 'active'),
+      supabase.from('attendance').select('player_id, present').in('activity_id', combinedIds).eq('date', dateStr),
       supabase.from('activity_sessions').select('status, notes').eq('activity_id', activity.id).eq('session_date', dateStr).maybeSingle(),
     ])
     if (enrollRes.data) setEnrollments(enrollRes.data)
@@ -1164,12 +1177,13 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     const dateStr = formatDate(selected.date)
     const newVal = attendance[playerId] === undefined ? true : !attendance[playerId]
     setAttendance(prev => ({ ...prev, [playerId]: newVal }))
-    await supabase.from('attendance').upsert({ player_id: playerId, activity_id: selected.data.id, date: dateStr, present: newVal }, { onConflict: 'player_id,activity_id,date' })
+    const activityId = enrollments.find(e => e.player_id === playerId)?.activity_id || selected.data.id
+    await supabase.from('attendance').upsert({ player_id: playerId, activity_id: activityId, date: dateStr, present: newVal }, { onConflict: 'player_id,activity_id,date' })
   }
 
   async function saveAttendance() {
     setSaving(true)
-    const rows = enrollments.map(e => ({ player_id: e.player_id, activity_id: selected.data.id, date: formatDate(selected.date), present: attendance[e.player_id] ?? false }))
+    const rows = enrollments.map(e => ({ player_id: e.player_id, activity_id: e.activity_id, date: formatDate(selected.date), present: attendance[e.player_id] ?? false }))
     await supabase.from('attendance').upsert(rows, { onConflict: 'player_id,activity_id,date' })
     setSaving(false)
   }
@@ -1183,10 +1197,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   async function addPlayerToActivity(playerId) {
     setAddingPlayer(true)
     const player = allPlayers.find(p => p.id === playerId)
-    const { data: existing } = await supabase.from('enrollments').select('id, status').eq('activity_id', selected.data.id).eq('player_id', playerId).maybeSingle()
+    const combinedIds = selected.combinedIds || [selected.data.id]
+    const { data: existing } = await supabase.from('enrollments').select('id, status').in('activity_id', combinedIds).eq('player_id', playerId).maybeSingle()
     if (existing) { if (existing.status !== 'active') await supabase.from('enrollments').update({ status: 'active' }).eq('id', existing.id) }
     else await supabase.from('enrollments').insert({ activity_id: selected.data.id, player_id: playerId, user_id: player?.user_id || null, status: 'active' })
-    const { data } = await supabase.from('enrollments').select('player_id, player:players(id, name, birth_year)').eq('activity_id', selected.data.id).eq('status', 'active')
+    const { data } = await supabase.from('enrollments').select('activity_id, player_id, player:players(id, name, birth_year)').in('activity_id', combinedIds).eq('status', 'active')
     if (data) setEnrollments(data)
     setAddPlayerSearch(''); setAddingPlayer(false)
   }
@@ -1412,7 +1427,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {weekDays.map(({ key, date }) => {
-                const dayActivities = activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(key))
+                const dayActivities = activities.filter(a => !a.parent_activity_id && (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(key))
                 const dayEvents = getEventsForDay(key, date)
                 const dayTrials = getTrialSlotsForDay(date)
                 const dayItems = [
@@ -1519,7 +1534,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '3px', marginBottom: '3px' }}>
                   {week.map(({ date, inMonth }, di) => {
                     const dayKey = DAYS_ORDER[date.getDay()]
-                    const dayActivities = inMonth ? activities.filter(a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey)) : []
+                    const dayActivities = inMonth ? activities.filter(a => !a.parent_activity_id && (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey)) : []
                     const dayEvents = inMonth ? getEventsForDay(dayKey, date) : []
                     const dayTrials = inMonth ? getTrialSlotsForDay(date) : []
                     const allItems = [
