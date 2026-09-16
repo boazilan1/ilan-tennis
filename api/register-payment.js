@@ -77,7 +77,7 @@ export default async function handler(req, res) {
         phone: profile?.phone || '',
       },
       custom: enrollmentId,
-      successUrl: `${origin}/register/complete`,
+      successUrl: `${origin}/register/thank-you`,
       failureUrl: `${origin}/register?activity=${activity.id}`,
       notifyUrl: `${origin}/api/morning-webhook`,
     })
