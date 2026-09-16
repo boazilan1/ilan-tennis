@@ -34,6 +34,7 @@ export default function Register() {
   const [locations, setLocations] = useState([])
   const [activity, setActivity] = useState(null)
   const [variants, setVariants] = useState([])
+  const [hasActiveSibling, setHasActiveSibling] = useState(false)
   const [track, setTrack] = useState('full')
   const [chosenDay, setChosenDay] = useState('')
   const [players, setPlayers] = useState([])
@@ -87,14 +88,16 @@ export default function Register() {
       return
     }
     async function fetchData() {
-      const [activityRes, playersRes, variantsRes] = await Promise.all([
+      const [activityRes, playersRes, variantsRes, siblingRes] = await Promise.all([
         supabase.from('activities').select('*').eq('id', activityId).single(),
         supabase.from('players').select('*').eq('user_id', user.id).order('created_at'),
         supabase.from('activities').select('*').eq('parent_activity_id', activityId).order('days_of_week'),
+        supabase.from('enrollments').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active'),
       ])
       if (activityRes.data) setActivity(activityRes.data)
       if (playersRes.data) setPlayers(playersRes.data)
       if (variantsRes.data) setVariants(variantsRes.data)
+      setHasActiveSibling((siblingRes.count || 0) > 0)
       setTrack('full'); setChosenDay('')
       setLoading(false)
     }
@@ -188,7 +191,7 @@ export default function Register() {
             activityName: effectiveActivity.name,
             activityDay: formatDays(effectiveActivity),
             activityTime: effectiveActivity.time,
-            price: effectiveActivity.price,
+            price: displayPrice,
           }),
         })
       } catch (notifyErr) {
@@ -196,12 +199,8 @@ export default function Register() {
       }
 
       // מעבר לתשלום
-      sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
-        id: newEnrollment.id, activityName: effectiveActivity.name,
-        standingOrderLink: effectiveActivity.payment_link || null,
-      }))
-
       let paymentUrl = effectiveActivity.payment_link || 'https://mrng.to/yLXsO2hg8s'
+      let standingOrderLink = effectiveActivity.payment_link || null
       try {
         const payRes = await fetch('/api/register-payment', {
           method: 'POST',
@@ -211,12 +210,17 @@ export default function Register() {
         if (payRes.ok) {
           const payData = await payRes.json()
           if (payData.url) paymentUrl = payData.url
+          if (payData.standingOrderLink) standingOrderLink = payData.standingOrderLink
         } else {
           console.error('register-payment failed, falling back to static payment link')
         }
       } catch (payErr) {
         console.error('register-payment request failed, falling back to static payment link', payErr)
       }
+
+      sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
+        id: newEnrollment.id, activityName: effectiveActivity.name, standingOrderLink,
+      }))
 
       window.location.href = paymentUrl
     } catch (err) {
@@ -352,6 +356,8 @@ export default function Register() {
     ? variants.find(v => (v.days_of_week || [])[0] === chosenDay)
     : null
   const effectiveActivity = chosenVariant || activity
+  const isSibling = hasActiveSibling && Number(effectiveActivity.sibling_discount_price) > 0
+  const displayPrice = isSibling ? Number(effectiveActivity.sibling_discount_price) : Number(effectiveActivity.price)
 
   return (
     <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '40px auto', padding: '0 20px' }}>
@@ -361,7 +367,18 @@ export default function Register() {
       <div style={{ background: '#e8f5e9', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
         <h3 style={{ margin: '0 0 8px', color: '#1a472a' }}>{activity.name}</h3>
         <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={15} color="var(--sand)" />{formatDays(effectiveActivity)} בשעה {activity.time}</p>
-        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={15} color="var(--sand)" />₪{effectiveActivity.price} לחודש</p>
+        <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Icon name="tag" size={15} color="var(--sand)" />
+          {isSibling ? (
+            <>
+              <span style={{ textDecoration: 'line-through', color: '#999' }}>₪{effectiveActivity.price}</span>
+              {' '}₪{displayPrice} לחודש
+              <span style={{ background: '#e8f5e9', color: '#1a472a', borderRadius: '20px', padding: '2px 10px', fontSize: '12px', fontWeight: '700' }}>הנחת אחים 🎉</span>
+            </>
+          ) : (
+            <>₪{displayPrice} לחודש</>
+          )}
+        </p>
       </div>
 
       {/* בחירת מסלול: פעמיים בשבוע או פעם אחת */}
@@ -412,7 +429,7 @@ export default function Register() {
       {(() => {
         const days = getActivityDaysOfWeek(effectiveActivity)
         if (!days.length || !effectiveActivity.price || (track === 'single' && !chosenDay)) return null
-        const plan = computeBillingPlan(new Date(), days, Number(effectiveActivity.price))
+        const plan = computeBillingPlan(new Date(), days, displayPrice)
         return (
           <div style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', border: '1px solid #eef2ee', marginBottom: '28px' }}>
             <div style={{

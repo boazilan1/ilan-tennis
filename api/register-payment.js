@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
     const { data: enrollment, error: enrollError } = await supabase
       .from('enrollments')
-      .select('id, user_id, created_at, activity:activities(id, name, price, day_of_week, days_of_week), player:players(name)')
+      .select('id, user_id, created_at, activity:activities(id, name, price, day_of_week, days_of_week, payment_link, sibling_discount_price, sibling_payment_link), player:players(name)')
       .eq('id', enrollmentId)
       .single()
 
@@ -35,8 +35,20 @@ export default async function handler(req, res) {
       .single()
 
     const activity = enrollment.activity
+
+    // Sibling discount: the registering parent already has another child
+    // with an active (paying) enrollment elsewhere in the system.
+    const { count: activeSiblingCount } = await supabase
+      .from('enrollments')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', enrollment.user_id)
+      .eq('status', 'active')
+    const isSibling = (activeSiblingCount || 0) > 0 && Number(activity.sibling_discount_price) > 0
+    const effectivePrice = isSibling ? Number(activity.sibling_discount_price) : Number(activity.price)
+    const standingOrderLink = (isSibling && activity.sibling_payment_link) || activity.payment_link || null
+
     const days = getActivityDaysOfWeek(activity)
-    const plan = computeBillingPlan(new Date(enrollment.created_at), days, Number(activity.price))
+    const plan = computeBillingPlan(new Date(enrollment.created_at), days, effectivePrice)
 
     const origin = req.headers.origin || `https://${req.headers.host}`
 
@@ -79,7 +91,7 @@ export default async function handler(req, res) {
     const { error: subError } = await supabase.from('billing_subscriptions').upsert({
       enrollment_id: enrollmentId,
       user_id: enrollment.user_id,
-      monthly_amount: Number(activity.price),
+      monthly_amount: effectivePrice,
       status: 'pending_first_payment',
       next_charge_date: formatDateISO(plan.standingOrderFirstDate),
       covers_month: formatDateISO(plan.standingOrderCoversDate),
@@ -87,7 +99,7 @@ export default async function handler(req, res) {
 
     if (subError) throw subError
 
-    res.status(200).json({ url: form.url })
+    res.status(200).json({ url: form.url, standingOrderLink, isSibling })
   } catch (err) {
     console.error('register-payment error', err)
     res.status(502).json({ error: 'Payment setup failed' })
