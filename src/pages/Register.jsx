@@ -285,8 +285,12 @@ export default function Register() {
                           </div>
                           {a.price && (
                             <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                              <div style={{ fontSize: '19px', fontWeight: '800', color: '#1a472a', lineHeight: 1 }}>₪{a.price}</div>
-                              <div style={{ fontSize: '10.5px', color: '#999', marginTop: '2px' }}>לחודש</div>
+                              <div style={{ fontSize: '19px', fontWeight: '800', color: '#1a472a', lineHeight: 1 }}>
+                                {Number(a.single_day_price) > 0 ? `₪${a.single_day_price}–${a.price}` : `₪${a.price}`}
+                              </div>
+                              <div style={{ fontSize: '10.5px', color: '#999', marginTop: '2px' }}>
+                                {Number(a.single_day_price) > 0 ? 'לחודש · לפי מס\' הפעמים בשבוע' : 'לחודש'}
+                              </div>
                             </div>
                           )}
                         </div>
