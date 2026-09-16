@@ -67,14 +67,8 @@ export default async function handler(req, res) {
       await supabase.from('profiles').update({ morning_client_id: morningClientId }).eq('id', enrollment.user_id)
     }
 
-    // TEMPORARY: lets a real end-to-end checkout be tested for ~nothing
-    // instead of the real prorated amount. Only active when explicitly
-    // enabled via env var — remove once verified.
-    const testAmount = Number(process.env.MORNING_TEST_FORCE_AMOUNT)
-    const chargeAmount = testAmount > 0 ? testAmount : plan.immediateCharge
-
     const form = await createPaymentForm({
-      amount: chargeAmount,
+      amount: plan.immediateCharge,
       description: `הרשמה לחוג ${activity.name} — ${enrollment.player?.name || ''}`,
       client: {
         id: morningClientId,
@@ -83,7 +77,7 @@ export default async function handler(req, res) {
         phone: profile?.phone || '',
       },
       custom: enrollmentId,
-      successUrl: `${origin}/register/thank-you`,
+      successUrl: `${origin}/register/complete`,
       failureUrl: `${origin}/register?activity=${activity.id}`,
       notifyUrl: `${origin}/api/morning-webhook`,
     })

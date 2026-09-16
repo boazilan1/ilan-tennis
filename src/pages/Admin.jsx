@@ -460,7 +460,7 @@ function TraineesTab() {
         id, name, birth_year, notes, user_id,
         enrollments(status, activity:activities(id, name, location_id, days_of_week, day_of_week, time, price))
       `).order('name'),
-      supabase.from('profiles').select('id, full_name, phone'),
+      supabase.from('profiles').select('id, full_name, phone, email'),
       supabase.from('locations').select('*').order('sort_order'),
     ])
     if (playerRes.data && profileRes.data) {
@@ -513,7 +513,7 @@ function TraineesTab() {
   }
 
   function matchesSearch(p) {
-    return !search || p.name.includes(search) || p.profile?.full_name?.includes(search) || p.profile?.phone?.includes(search)
+    return !search || p.name.includes(search) || p.profile?.full_name?.includes(search) || p.profile?.phone?.includes(search) || p.profile?.email?.includes(search)
   }
 
   const counts = {
@@ -666,6 +666,7 @@ function TraineesTab() {
                               <div>
                                 <div style={{ fontSize: '14px', color: '#444', fontWeight: '500' }}>{p.profile?.full_name || '—'}</div>
                                 <div style={{ fontSize: '12px', color: '#aaa' }}>{p.profile?.phone || ''}</div>
+                                <div style={{ fontSize: '12px', color: '#aaa' }}>{p.profile?.email || ''}</div>
                               </div>
                               <StatusPill label={stInfo.label} color={stInfo.color} bg={stInfo.bg} />
                               <button onClick={() => startEdit(p)} style={outlineBtn}>עריכה</button>

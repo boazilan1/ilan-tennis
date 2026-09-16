@@ -198,31 +198,14 @@ export default function Register() {
         console.error('notify email failed', notifyErr)
       }
 
-      // מעבר לתשלום
-      let paymentUrl = effectiveActivity.payment_link || 'https://mrng.to/yLXsO2hg8s'
-      let standingOrderLink = effectiveActivity.payment_link || null
-      try {
-        const payRes = await fetch('/api/register-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enrollmentId: newEnrollment.id }),
-        })
-        if (payRes.ok) {
-          const payData = await payRes.json()
-          if (payData.url) paymentUrl = payData.url
-          if (payData.standingOrderLink) standingOrderLink = payData.standingOrderLink
-        } else {
-          console.error('register-payment failed, falling back to static payment link')
-        }
-      } catch (payErr) {
-        console.error('register-payment request failed, falling back to static payment link', payErr)
-      }
+      // שלב 1: אישור הוראת קבע (לפני התשלום הראשוני, כדי שלא ידלגו עליו)
+      const standingOrderLink = (isSibling && effectiveActivity.sibling_payment_link) || effectiveActivity.payment_link || null
 
       sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
         id: newEnrollment.id, activityName: effectiveActivity.name, standingOrderLink,
       }))
 
-      window.location.href = paymentUrl
+      navigate('/register/thank-you')
     } catch (err) {
       setError('אירעה שגיאה, נסה שוב')
       console.error(err)
