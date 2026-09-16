@@ -32,10 +32,10 @@ export default function RegisterThankYou() {
             {activityName ? <>התשלום הראשון לחוג <strong>{activityName}</strong> התקבל.</> : 'התשלום הראשון התקבל.'}
           </p>
 
-          <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '18px', textAlign: 'right', marginBottom: '20px' }}>
-            <div style={{ fontWeight: '700', color: '#b45309', marginBottom: '6px' }}>נשאר רק צעד אחד</div>
-            <p style={{ color: '#666', fontSize: '13.5px', lineHeight: 1.6, margin: 0 }}>
-              כדי שהחיוב החודשי הבא יתבצע אוטומטית, יש לאשר את אמצעי התשלום להמשך — לחיצה אחת, בלי צורך לחזור לזה כל חודש.
+          <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', borderRadius: '10px', padding: '18px', textAlign: 'right', marginBottom: '20px' }}>
+            <div style={{ fontWeight: '800', color: '#dc2626', marginBottom: '6px', fontSize: '14.5px' }}>⚠️ ההרשמה עדיין לא הושלמה!</div>
+            <p style={{ color: '#555', fontSize: '13.5px', lineHeight: 1.7, margin: 0 }}>
+              בלי לאשר את הצעד הזה, החיוב החודשי הבא <strong>לא יתבצע אוטומטית</strong> וההרשמה תישאר לא פעילה. זו לחיצה אחת בלבד, ולא תצטרכו לחזור לזה כל חודש.
             </p>
           </div>
 
@@ -43,10 +43,10 @@ export default function RegisterThankYou() {
             display: 'inline-block', background: '#1a472a', color: '#fff', textDecoration: 'none',
             borderRadius: '10px', padding: '14px 28px', fontSize: '15px', fontWeight: '700', marginBottom: '14px',
           }}>
-            אישור אמצעי תשלום להמשך ←
+            אישור אמצעי תשלום — לחצו כאן להשלמת ההרשמה ←
           </a>
           <div>
-            <Link to="/" style={{ color: '#999', fontSize: '13px' }}>לא עכשיו, לעמוד הבית</Link>
+            <Link to="/" style={{ color: '#bbb', fontSize: '12px' }}>להמשיך בלי לאשר (לא מומלץ)</Link>
           </div>
         </div>
       </main>

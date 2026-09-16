@@ -85,8 +85,11 @@ export default async function handler(req, res) {
       morningTokenId = tokenRes?.items?.[0]?.id || null
     }
 
-    await supabase.from('enrollments').update({ status: 'active' }).eq('id', enrollmentId)
-
+    // Deliberately do NOT flip enrollments.status to 'active' here — payment
+    // succeeding is not proof the amount was actually correct (a stray test
+    // override once let a real ₪1 charge slip through and auto-activate).
+    // Admin still confirms manually in the panel, where the actual charged
+    // amount (from billing_charges, below) is shown next to the expected one.
     await supabase.from('billing_subscriptions').update({
       status: 'active',
       morning_client_id: recipientId || null,
@@ -101,25 +104,6 @@ export default async function handler(req, res) {
       status: 'success',
       morning_document_id: event.id,
     })
-
-    const { data: enrollment } = await supabase
-      .from('enrollments')
-      .select('user_id, player:players(name), activity:activities(name)')
-      .eq('id', enrollmentId)
-      .single()
-
-    if (payerProfile?.email) {
-      fetch(`${req.headers.origin || `https://${req.headers.host}`}/api/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'payment_confirmed',
-          registrantEmail: payerProfile.email,
-          playerName: enrollment.player?.name || '',
-          activityName: enrollment.activity?.name || '',
-        }),
-      }).catch(err => console.error('notify email failed', err))
-    }
 
     res.status(200).json({ ok: true })
   } catch (err) {

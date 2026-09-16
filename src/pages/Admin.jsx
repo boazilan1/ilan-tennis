@@ -132,6 +132,7 @@ function EnrollmentsTab() {
   const [dataLoading, setDataLoading] = useState(true)
   const [updating, setUpdating] = useState(null)
   const [subscriptions, setSubscriptions] = useState({})
+  const [initialCharges, setInitialCharges] = useState({})
 
   useEffect(() => { fetchData() }, [])
 
@@ -158,6 +159,21 @@ function EnrollmentsTab() {
       const map = {}
       subRes.data.forEach(s => { map[s.enrollment_id] = s })
       setSubscriptions(map)
+
+      const subIds = subRes.data.map(s => s.id)
+      if (subIds.length > 0) {
+        const { data: chargesData } = await supabase
+          .from('billing_charges')
+          .select('subscription_id, amount, status, attempted_at')
+          .in('subscription_id', subIds)
+          .eq('charge_type', 'initial')
+          .order('attempted_at', { ascending: false })
+        if (chargesData) {
+          const chargeMap = {}
+          chargesData.forEach(c => { if (!chargeMap[c.subscription_id]) chargeMap[c.subscription_id] = c })
+          setInitialCharges(chargeMap)
+        }
+      }
     }
     setDataLoading(false)
   }
@@ -324,6 +340,7 @@ function EnrollmentsTab() {
                       const plan = (g.activity && days.length && g.activity.price)
                         ? computeBillingPlan(new Date(e.created_at), days, Number(g.activity.price))
                         : null
+                      const actualCharge = sub ? initialCharges[sub.id] : null
                       return (
                         <div key={e.id} style={{
                           background: '#fff', borderRadius: '16px', padding: '16px 20px',
@@ -341,12 +358,25 @@ function EnrollmentsTab() {
                             <div style={{ fontSize: '12px', color: '#aaa' }}>{e.profile?.email || ''}</div>
                           </div>
                           <div style={{ fontSize: '12px', color: '#bbb', minWidth: '70px', textAlign: 'center' }}>{date}</div>
-                          {plan && (
+                          {plan && !actualCharge && (
                             <span title={`${plan.remainingLessons} אימונים שנותרו ב${plan.currentMonthLabel}${plan.extraMonthCharged ? ` + חודש ${plan.extraMonthLabel} מלא (מועד ה-20 הקרוב כבר עבר)` : ''} · הוראת קבע: ₪${plan.monthlyPrice}/חודש, חיוב ראשון ב-${plan.standingOrderFirstDateLabel} עבור ${plan.standingOrderCoversLabel}`} style={{
                               fontSize: '11px', fontWeight: '700', color: '#1a472a', background: '#eef5ee',
                               border: '1px solid #c5ddc5', borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
-                            }}>💳 עכשיו ₪{plan.immediateCharge}</span>
+                            }}>💳 צפי ₪{plan.immediateCharge}</span>
                           )}
+                          {plan && actualCharge && (() => {
+                            const mismatch = actualCharge.amount < plan.immediateCharge * 0.5
+                            return (
+                              <span title={mismatch
+                                ? `שולם רק ₪${actualCharge.amount} מתוך ₪${plan.immediateCharge} צפויים — בדוק לפני שמאשרים!`
+                                : `נגבה בפועל ₪${actualCharge.amount} (צפי היה ₪${plan.immediateCharge})`} style={{
+                                fontSize: '11px', fontWeight: '700', whiteSpace: 'nowrap', borderRadius: '20px', padding: '4px 10px',
+                                color: mismatch ? '#dc2626' : '#16a34a',
+                                background: mismatch ? '#fee2e2' : '#dcfce7',
+                                border: `1px solid ${mismatch ? '#fecaca' : '#bbf7d0'}`,
+                              }}>{mismatch ? '⚠️' : '✓'} שולם ₪{actualCharge.amount}{mismatch ? ` (צפי ₪${plan.immediateCharge})` : ''}</span>
+                            )
+                          })()}
                           {e.status === 'pending' && e.payment_redirect_at && (
                             <span title={`חזר מהתשלום ב-${new Date(e.payment_redirect_at).toLocaleString('he-IL')}`} style={{
                               fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fffbeb',
