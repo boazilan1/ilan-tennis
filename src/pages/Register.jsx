@@ -198,6 +198,7 @@ export default function Register() {
       // מעבר לתשלום
       sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
         id: newEnrollment.id, activityName: effectiveActivity.name,
+        standingOrderLink: effectiveActivity.payment_link || null,
       }))
 
       let paymentUrl = effectiveActivity.payment_link || 'https://mrng.to/yLXsO2hg8s'
