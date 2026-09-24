@@ -450,6 +450,9 @@ function TraineesTab() {
   const [adding, setAdding] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({ name: '', birth_year: '', notes: '' })
+  const [profileOpenId, setProfileOpenId] = useState(null)
+  const [attendanceHistory, setAttendanceHistory] = useState([])
+  const [loadingAttendance, setLoadingAttendance] = useState(false)
 
   useEffect(() => { fetchPlayers() }, [])
 
@@ -504,6 +507,20 @@ function TraineesTab() {
     setPlayers(prev => prev.map(p => p.id === playerId
       ? { ...p, name: editForm.name.trim(), birth_year: year, notes: editForm.notes.trim() || null } : p))
     setEditingId(null)
+  }
+
+  async function toggleProfile(p) {
+    if (profileOpenId === p.id) { setProfileOpenId(null); return }
+    setProfileOpenId(p.id)
+    setEditingId(null)
+    setLoadingAttendance(true)
+    const { data } = await supabase.from('attendance')
+      .select('date, present, activity:activities(name)')
+      .eq('player_id', p.id)
+      .order('date', { ascending: false })
+      .limit(50)
+    setAttendanceHistory(data || [])
+    setLoadingAttendance(false)
   }
 
   async function deletePlayer(p) {
@@ -657,7 +674,7 @@ function TraineesTab() {
                       return (
                         <div key={`${p.id}-${enrollment?.activity?.id || 'none'}`} style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', border: '1px solid #f0f0f0', borderRight: `4px solid ${stInfo.color}`, overflow: 'hidden' }}>
                           {editingId !== p.id ? (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr auto auto auto', alignItems: 'center', gap: '12px', padding: '16px 20px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr auto auto auto auto', alignItems: 'center', gap: '12px', padding: '16px 20px' }}>
                               <div>
                                 <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{p.name}</div>
                                 <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {p.birth_year}</div>
@@ -669,6 +686,7 @@ function TraineesTab() {
                                 <div style={{ fontSize: '12px', color: '#aaa' }}>{p.profile?.email || ''}</div>
                               </div>
                               <StatusPill label={stInfo.label} color={stInfo.color} bg={stInfo.bg} />
+                              <button onClick={() => toggleProfile(p)} style={{ ...outlineBtn, color: profileOpenId === p.id ? '#fff' : '#1a472a', background: profileOpenId === p.id ? '#1a472a' : '#fff', borderColor: '#1a472a' }}>פרופיל</button>
                               <button onClick={() => startEdit(p)} style={outlineBtn}>עריכה</button>
                               <ActionBtn label="מחק" color="#dc2626" outline onClick={() => deletePlayer(p)} />
                             </div>
@@ -683,6 +701,30 @@ function TraineesTab() {
                                 <button onClick={() => setEditingId(null)} style={outlineBtn}>ביטול</button>
                                 <button onClick={() => saveEdit(p.id)} style={primaryBtn}>שמור</button>
                               </div>
+                            </div>
+                          )}
+                          {profileOpenId === p.id && (
+                            <div style={{ padding: '4px 20px 20px', borderTop: '1px solid #f0f0f0' }}>
+                              <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a472a', margin: '14px 0 10px' }}>היסטוריית נוכחות</div>
+                              {loadingAttendance ? (
+                                <p style={{ color: '#bbb', fontSize: '13px', margin: 0 }}>טוען...</p>
+                              ) : attendanceHistory.length === 0 ? (
+                                <p style={{ color: '#bbb', fontSize: '13px', margin: 0 }}>אין עדיין נתוני נוכחות</p>
+                              ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '260px', overflowY: 'auto' }}>
+                                  {attendanceHistory.map((a, i) => (
+                                    <div key={i} style={{
+                                      display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px',
+                                      background: a.present ? '#f0fdf4' : '#fef2f2', border: `1px solid ${a.present ? '#bbf7d0' : '#fecaca'}`,
+                                      borderRadius: '8px', padding: '8px 12px',
+                                    }}>
+                                      <span>{a.present ? '✅' : '❌'}</span>
+                                      <span style={{ color: '#333', minWidth: '90px' }}>{new Date(a.date).toLocaleDateString('he-IL')}</span>
+                                      <span style={{ color: '#888' }}>{a.activity?.name || '—'}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -993,6 +1035,7 @@ function CalendarTab() {
   const [adminEvents, setAdminEvents] = useState([])
   const [allPlayers, setAllPlayers] = useState([])
   const [trialSignups, setTrialSignups] = useState([])
+  const [enrollCounts, setEnrollCounts] = useState({})
   const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
   const [showAddPerson, setShowAddPerson] = useState(false)
   const [walkInName, setWalkInName] = useState('')
@@ -1026,16 +1069,25 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const [actRes, evRes, playerRes, trialRes] = await Promise.all([
+    const [actRes, evRes, playerRes, trialRes, enrollRes] = await Promise.all([
       supabase.from('activities').select('*'),
       supabase.from('admin_events').select('*').order('created_at'),
       supabase.from('players').select('id, name, birth_year, user_id').order('name'),
       supabase.from('trial_signups').select('*').order('time_slot'),
+      supabase.from('enrollments').select('activity_id, status').in('status', ['active', 'pending']),
     ])
     if (actRes.data) setActivities(actRes.data)
     if (evRes.data) setAdminEvents(evRes.data)
     if (playerRes.data) setAllPlayers(playerRes.data)
     if (trialRes.data) setTrialSignups(trialRes.data)
+    if (enrollRes.data) {
+      const counts = {}
+      enrollRes.data.forEach(e => {
+        if (!counts[e.activity_id]) counts[e.activity_id] = { active: 0, pending: 0 }
+        counts[e.activity_id][e.status]++
+      })
+      setEnrollCounts(counts)
+    }
   }
 
   function formatDate(date) { return date.toISOString().split('T')[0] }
@@ -1116,7 +1168,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     setActivitySession({ status: 'scheduled', notes: '' })
     const dateStr = formatDate(date)
     const [enrollRes, attendRes, sessionRes] = await Promise.all([
-      supabase.from('enrollments').select('activity_id, player_id, player:players(id, name, birth_year)').in('activity_id', combinedIds).eq('status', 'active'),
+      supabase.from('enrollments').select('activity_id, player_id, status, player:players(id, name, birth_year)').in('activity_id', combinedIds).in('status', ['active', 'pending']),
       supabase.from('attendance').select('player_id, present').in('activity_id', combinedIds).eq('date', dateStr),
       supabase.from('activity_sessions').select('status, notes').eq('activity_id', activity.id).eq('session_date', dateStr).maybeSingle(),
     ])
@@ -1232,8 +1284,14 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     const { data: existing } = await supabase.from('enrollments').select('id, status').in('activity_id', combinedIds).eq('player_id', playerId).maybeSingle()
     if (existing) { if (existing.status !== 'active') await supabase.from('enrollments').update({ status: 'active' }).eq('id', existing.id) }
     else await supabase.from('enrollments').insert({ activity_id: selected.data.id, player_id: playerId, user_id: player?.user_id || null, status: 'active' })
-    const { data } = await supabase.from('enrollments').select('activity_id, player_id, player:players(id, name, birth_year)').in('activity_id', combinedIds).eq('status', 'active')
+    const { data } = await supabase.from('enrollments').select('activity_id, player_id, status, player:players(id, name, birth_year)').in('activity_id', combinedIds).in('status', ['active', 'pending'])
     if (data) setEnrollments(data)
+    setEnrollCounts(prev => {
+      const next = { ...prev }
+      combinedIds.forEach(id => { next[id] = { active: 0, pending: 0 } })
+      data?.forEach(e => { if (!next[e.activity_id]) next[e.activity_id] = { active: 0, pending: 0 }; next[e.activity_id][e.status]++ })
+      return next
+    })
     setAddPlayerSearch(''); setAddingPlayer(false)
   }
 
@@ -1490,6 +1548,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                         {dayItems.map(({ type, item }) => {
                           if (type === 'activity') {
                             const isSel = selected?.type === 'activity' && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
+                            const cnt = enrollCounts[item.id] || { active: 0, pending: 0 }
                             return (
                               <button key={`a-${item.id}`} onClick={() => openActivity(item, date)} style={{
                                 background: isSel ? '#1a472a' : '#f0f7f0', color: isSel ? '#fff' : '#1a472a',
@@ -1499,6 +1558,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               }}>
                                 <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.name}</div>
                                 {item.time && <div style={{ fontSize: '11px', opacity: 0.75, marginTop: '1px' }}>🕐 {item.time}</div>}
+                                {(cnt.active + cnt.pending) > 0 && (
+                                  <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '1px' }}>
+                                    👥 {cnt.active + cnt.pending}{cnt.pending > 0 ? ` (${cnt.pending} לא שילמו)` : ''}
+                                  </div>
+                                )}
                               </button>
                             )
                           }
@@ -1665,7 +1729,13 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               borderRadius: '12px', padding: '12px 14px', cursor: 'pointer', textAlign: 'right', width: '100%',
                             }}>
                               <span style={{ fontSize: '22px', minWidth: '26px' }}>{present === true ? '✅' : present === false ? '❌' : '⬜'}</span>
-                              <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{e.player?.name}</div>
+                              <div style={{ fontWeight: '600', fontSize: '15px', color: '#111', flex: 1 }}>{e.player?.name}</div>
+                              {e.status === 'pending' && (
+                                <span style={{
+                                  fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fef3c7',
+                                  border: '1px solid #fde68a', borderRadius: '20px', padding: '3px 9px', whiteSpace: 'nowrap',
+                                }}>לא שילם</span>
+                              )}
                             </button>
                           )
                         })}
