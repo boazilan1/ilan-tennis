@@ -21,6 +21,7 @@ const ALL_KEYS = [
   'givatzeev_intro_title','givatzeev_intro_text','givatzeev_image_url','givatzeev_image_pos_x','givatzeev_image_pos_y',
   'givatzeev_external_url','givatzeev_external_label',
   'register_terms_text','register_terms_file_url',
+  'package_option1_sessions','package_option1_price','package_option2_sessions','package_option2_price','package_payment_link',
 ]
 
 function SizeInput({ value, onChange }) {
@@ -374,6 +375,19 @@ export default function AdminSettings() {
               <label style={lbl}>קובץ תנאי הרשמה מלאים (PDF)</label>
               <FileUpload value={g('register_terms_file_url')} onChange={v => set('register_terms_file_url', v)} folder="documents" accept=".pdf" label="קובץ PDF" />
               <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>אופציונלי — אם מועלה קובץ, יופיע קישור "לצפייה בתנאים המלאים" ליד תיבת האישור בטופס ההרשמה</div>
+            </div>
+          </Card>
+
+          <Card title="חבילות אימונים פרטיים">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Field label="חבילה 1 — מספר שיעורים" value={g('package_option1_sessions')} onChange={v => set('package_option1_sessions', v)} />
+              <Field label="חבילה 1 — מחיר (₪)" value={g('package_option1_price')} onChange={v => set('package_option1_price', v)} />
+              <Field label="חבילה 2 — מספר שיעורים" value={g('package_option2_sessions')} onChange={v => set('package_option2_sessions', v)} />
+              <Field label="חבילה 2 — מחיר (₪)" value={g('package_option2_price')} onChange={v => set('package_option2_price', v)} />
+            </div>
+            <div style={{ marginTop: '14px' }}>
+              <Field label="קישור לתשלום עבור רכישת חבילה" value={g('package_payment_link')} onChange={v => set('package_payment_link', v)} />
+              <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = קישור התשלום הכללי של האקדמיה</div>
             </div>
           </Card>
 

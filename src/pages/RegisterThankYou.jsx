@@ -1,26 +1,54 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 
+// Pure read (no clearing here) — React 18 StrictMode double-invokes
+// useState initializers in dev, and a side effect here would make the
+// second call find nothing, so the actual sessionStorage.removeItem
+// happens once, separately, in a useEffect below.
 function readPendingEnrollment() {
   const raw = sessionStorage.getItem('ilan_pending_enrollment')
-  if (!raw) return { id: null, activityName: '', standingOrderLink: '' }
-  sessionStorage.removeItem('ilan_pending_enrollment')
-  try {
-    const { id, activityName, standingOrderLink } = JSON.parse(raw)
-    return { id: id || null, activityName: activityName || '', standingOrderLink: standingOrderLink || '' }
-  } catch {
-    return { id: null, activityName: '', standingOrderLink: '' }
+  if (raw) {
+    try {
+      const { id, activityName, standingOrderLink } = JSON.parse(raw)
+      return { id: id || null, kind: 'enrollment', activityName: activityName || '', standingOrderLink: standingOrderLink || '' }
+    } catch {
+      return { id: null, kind: 'enrollment', activityName: '', standingOrderLink: '' }
+    }
   }
+  const rawPrivate = sessionStorage.getItem('ilan_pending_private_booking')
+  if (rawPrivate) {
+    try {
+      const { id, kind } = JSON.parse(rawPrivate)
+      return { id: id || null, kind: kind || 'privateBooking', activityName: '', standingOrderLink: '' }
+    } catch {
+      return { id: null, kind: 'privateBooking', activityName: '', standingOrderLink: '' }
+    }
+  }
+  return { id: null, kind: 'enrollment', activityName: '', standingOrderLink: '' }
 }
 
 export default function RegisterThankYou() {
-  const [{ id, activityName, standingOrderLink }] = useState(readPendingEnrollment)
+  const [{ id, kind, activityName, standingOrderLink }] = useState(readPendingEnrollment)
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    if (id) supabase.rpc('mark_payment_redirect', { p_enrollment_id: id })
-  }, [id])
+    sessionStorage.removeItem('ilan_pending_enrollment')
+    sessionStorage.removeItem('ilan_pending_private_booking')
+  }, [])
+
+  useEffect(() => {
+    // A payment-provider redirect is always a fresh page load, so the
+    // Supabase client's session hasn't finished restoring from storage yet
+    // when this effect would otherwise fire — the RPC call would go out
+    // unauthenticated and silently match zero rows. Wait for auth first.
+    if (authLoading || !user || !id) return
+    if (kind === 'privateBooking') supabase.rpc('mark_slot_payment_redirect', { p_booking_id: id })
+    else if (kind === 'package') supabase.rpc('mark_package_payment_redirect', { p_package_id: id })
+    else supabase.rpc('mark_payment_redirect', { p_enrollment_id: id })
+  }, [id, kind, user, authLoading])
 
   if (standingOrderLink) {
     return (

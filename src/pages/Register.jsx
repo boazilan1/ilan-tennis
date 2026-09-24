@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
@@ -262,7 +262,12 @@ export default function Register() {
       <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3', padding: '40px 20px' }}>
         <div style={{ maxWidth: '560px', margin: '0 auto' }}>
           <h1 style={{ color: '#1a472a', fontSize: '24px', fontWeight: '800', marginBottom: '6px' }}>הרשמה לחוג</h1>
-          <p style={{ color: '#888', marginBottom: '28px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
+          <p style={{ color: '#888', marginBottom: '20px', fontSize: '14px' }}>בחרו חוג להרשמה</p>
+
+          <Link to="/private-lessons" style={{
+            display: 'block', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '14px',
+            padding: '14px 18px', marginBottom: '28px', textDecoration: 'none', color: '#0e7490', fontWeight: '700', fontSize: '14px',
+          }}>🎾 מחפשים אימון פרטי? לחצו כאן →</Link>
 
           {groups.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>

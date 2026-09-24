@@ -9,6 +9,7 @@ import AdminPages from './AdminPages'
 import AdminSettings from './AdminSettings'
 import AdminLocations from './AdminLocations'
 import AdminTrialSignups from './AdminTrialSignups'
+import AdminPackages from './AdminPackages'
 import { computeBillingPlan, getActivityDaysOfWeek } from '../lib/billing'
 
 const DAYS_HE = {
@@ -68,6 +69,7 @@ export default function Admin() {
     { key: 'calendar',    label: 'יומן' },
     { key: 'tournaments', label: 'תחרויות' },
     { key: 'trial',       label: 'שיעורי ניסיון' },
+    { key: 'packages',    label: 'חבילות' },
     { key: 'sections',    label: 'תוכן' },
     { key: 'pages',       label: 'דפים' },
     { key: 'contact',     label: 'פניות' },
@@ -114,6 +116,7 @@ export default function Admin() {
         {tab === 'calendar'    && <CalendarTab />}
         {tab === 'tournaments' && <TournamentsTab />}
         {tab === 'trial'       && <AdminTrialSignups />}
+        {tab === 'packages'    && <AdminPackages />}
         {tab === 'sections'    && <AdminSections />}
         {tab === 'pages'       && <AdminPages />}
         {tab === 'contact'     && <AdminContact />}
@@ -1017,6 +1020,7 @@ const outlineBtn = { background: '#fff', color: '#444', border: '1px solid #ddd'
 
 /* ─── Calendar Tab ─── */
 const EMPTY_EVENT_FORM = { title: '', description: '', is_recurring: false, day_of_week: 'sunday', event_date: '', time: '' }
+const EMPTY_SLOT_FORM = { slot_date: '', time: '', duration_minutes: '45', price: '', location_id: '', payment_link: '', notes: '' }
 const STATUS_EVENT = {
   scheduled: { label: 'מתוכנן',    color: '#d97706', bg: '#fef3c7' },
   completed: { label: 'בוצע ✓',    color: '#16a34a', bg: '#dcfce7' },
@@ -1036,6 +1040,15 @@ function CalendarTab() {
   const [allPlayers, setAllPlayers] = useState([])
   const [trialSignups, setTrialSignups] = useState([])
   const [enrollCounts, setEnrollCounts] = useState({})
+  const [privateSlots, setPrivateSlots] = useState([])
+  const [locations, setLocations] = useState([])
+  const [showSlotForm, setShowSlotForm] = useState(false)
+  const [slotForm, setSlotForm] = useState(EMPTY_SLOT_FORM)
+  const [savingSlot, setSavingSlot] = useState(false)
+  const [deletingSlot, setDeletingSlot] = useState(false)
+  const [slotBooking, setSlotBooking] = useState(null)
+  const [loadingSlotBooking, setLoadingSlotBooking] = useState(false)
+  const [confirmingBooking, setConfirmingBooking] = useState(false)
   const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
   const [showAddPerson, setShowAddPerson] = useState(false)
   const [walkInName, setWalkInName] = useState('')
@@ -1069,17 +1082,21 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const [actRes, evRes, playerRes, trialRes, enrollRes] = await Promise.all([
+    const [actRes, evRes, playerRes, trialRes, enrollRes, slotRes, locRes] = await Promise.all([
       supabase.from('activities').select('*'),
       supabase.from('admin_events').select('*').order('created_at'),
       supabase.from('players').select('id, name, birth_year, user_id').order('name'),
       supabase.from('trial_signups').select('*').order('time_slot'),
       supabase.from('enrollments').select('activity_id, status').in('status', ['active', 'pending']),
+      supabase.from('private_slots').select('*').neq('status', 'cancelled'),
+      supabase.from('locations').select('*').order('sort_order'),
     ])
     if (actRes.data) setActivities(actRes.data)
     if (evRes.data) setAdminEvents(evRes.data)
     if (playerRes.data) setAllPlayers(playerRes.data)
     if (trialRes.data) setTrialSignups(trialRes.data)
+    if (slotRes.data) setPrivateSlots(slotRes.data)
+    if (locRes.data) setLocations(locRes.data)
     if (enrollRes.data) {
       const counts = {}
       enrollRes.data.forEach(e => {
@@ -1365,6 +1382,66 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     setShowEventForm(false); setEditingEvent(null); setEventForm(EMPTY_EVENT_FORM); setRosterForm({})
   }
 
+  function openSlotForm(date) {
+    setSlotForm({ ...EMPTY_SLOT_FORM, slot_date: date ? formatDate(date) : '' })
+    setShowSlotForm(true); setSelected(null); setShowEventForm(false)
+  }
+
+  async function submitSlotForm(e) {
+    e.preventDefault()
+    if (!slotForm.slot_date || !slotForm.time.trim() || !slotForm.price) return
+    setSavingSlot(true)
+    const payload = {
+      slot_date: slotForm.slot_date,
+      time: slotForm.time.trim(),
+      duration_minutes: Number(slotForm.duration_minutes) || 45,
+      price: Number(slotForm.price),
+      location_id: slotForm.location_id || null,
+      payment_link: slotForm.payment_link.trim() || null,
+      notes: slotForm.notes.trim() || null,
+    }
+    const { data } = await supabase.from('private_slots').insert(payload).select().single()
+    if (data) setPrivateSlots(prev => [...prev, data])
+    setShowSlotForm(false); setSlotForm(EMPTY_SLOT_FORM); setSavingSlot(false)
+  }
+
+  async function openPrivateSlot(slot, date) {
+    setSelected({ type: 'privateSlot', data: slot, date })
+    setShowEventForm(false); setShowSlotForm(false)
+    setSlotBooking(null); setLoadingSlotBooking(true)
+    const { data } = await supabase.from('private_slot_bookings')
+      .select('id, payment_method, status, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .eq('slot_id', slot.id).neq('status', 'cancelled').maybeSingle()
+    setSlotBooking(data || null)
+    setLoadingSlotBooking(false)
+  }
+
+  async function confirmSlotBookingPayment() {
+    if (!slotBooking) return
+    setConfirmingBooking(true)
+    await supabase.from('private_slot_bookings').update({ status: 'active' }).eq('id', slotBooking.id)
+    setSlotBooking(prev => ({ ...prev, status: 'active' }))
+    setConfirmingBooking(false)
+  }
+
+  async function deletePrivateSlot(slot) {
+    const warning = slotBooking
+      ? `למשבצת הזו יש הרשמה של ${slotBooking.player?.name}. למחוק בכל זאת? ${slotBooking.payment_method === 'balance' ? 'השיעור יוחזר ליתרה שלו.' : ''}`
+      : 'למחוק את המשבצת הזו?'
+    if (!window.confirm(warning)) return
+    setDeletingSlot(true)
+    if (slotBooking?.payment_method === 'balance') {
+      const { data: pkg } = await supabase.from('private_slot_bookings').select('package_id').eq('id', slotBooking.id).single()
+      if (pkg?.package_id) {
+        const { data: current } = await supabase.from('lesson_packages').select('remaining_sessions').eq('id', pkg.package_id).single()
+        if (current) await supabase.from('lesson_packages').update({ remaining_sessions: current.remaining_sessions + 1, status: 'active' }).eq('id', pkg.package_id)
+      }
+    }
+    await supabase.from('private_slots').delete().eq('id', slot.id)
+    setPrivateSlots(prev => prev.filter(s => s.id !== slot.id))
+    setSelected(null); setSlotBooking(null); setDeletingSlot(false)
+  }
+
   const presentCount = enrollments.filter(e => attendance[e.player_id] === true).length
   const eventPresentCount = Object.values(eventPlayerMap).filter(v => v === true).length
 
@@ -1434,13 +1511,67 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               }}>{label}</button>
             ))}
           </div>
-          <button onClick={openAddForm} style={{
-            background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-            color: '#fff', border: 'none', borderRadius: '10px',
-            padding: '10px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
-            boxShadow: '0 4px 12px rgba(124,58,237,0.3)',
-          }}>+ אירוע אישי</button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button onClick={() => openSlotForm(null)} style={{
+              background: 'linear-gradient(135deg, #0891b2, #0e7490)',
+              color: '#fff', border: 'none', borderRadius: '10px',
+              padding: '10px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(8,145,178,0.3)',
+            }}>+ אימון פרטי</button>
+            <button onClick={openAddForm} style={{
+              background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+              color: '#fff', border: 'none', borderRadius: '10px',
+              padding: '10px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(124,58,237,0.3)',
+            }}>+ אירוע אישי</button>
+          </div>
         </div>
+
+        {/* Private slot form */}
+        {showSlotForm && (
+          <div style={{ background: '#fff', border: '1px solid #cffafe', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(8,145,178,0.1)' }}>
+            <div style={{ fontWeight: '700', fontSize: '16px', color: '#0e7490', marginBottom: '16px' }}>אימון פרטי חדש</div>
+            <form onSubmit={submitSlotForm} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div>
+                <label style={labelStyle}>תאריך *</label>
+                <input type="date" value={slotForm.slot_date} onChange={e => setSlotForm(f => ({ ...f, slot_date: e.target.value }))} style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>שעה *</label>
+                <input value={slotForm.time} onChange={e => setSlotForm(f => ({ ...f, time: e.target.value }))} placeholder="17:00" style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>משך (דקות)</label>
+                <input type="number" value={slotForm.duration_minutes} onChange={e => setSlotForm(f => ({ ...f, duration_minutes: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>מחיר (₪) *</label>
+                <input type="number" value={slotForm.price} onChange={e => setSlotForm(f => ({ ...f, price: e.target.value }))} style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>מיקום</label>
+                <select value={slotForm.location_id} onChange={e => setSlotForm(f => ({ ...f, location_id: e.target.value }))} style={inputStyle}>
+                  <option value="">— ללא —</option>
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>קישור לתשלום (אופציונלי)</label>
+                <input value={slotForm.payment_link} onChange={e => setSlotForm(f => ({ ...f, payment_link: e.target.value }))} placeholder="https://..." style={inputStyle} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>הערות</label>
+                <input value={slotForm.notes} onChange={e => setSlotForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowSlotForm(false)} style={outlineBtn}>ביטול</button>
+                <button type="submit" disabled={savingSlot} style={{ background: '#0e7490', color: '#fff', border: 'none', borderRadius: '10px', padding: '9px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', opacity: savingSlot ? 0.6 : 1 }}>
+                  {savingSlot ? 'שומר...' : 'הוסף משבצת'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Event form */}
         {showEventForm && (
@@ -1519,10 +1650,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 const dayActivities = activities.filter(a => !a.parent_activity_id && (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(key))
                 const dayEvents = getEventsForDay(key, date)
                 const dayTrials = getTrialSlotsForDay(date)
+                const daySlots = privateSlots.filter(s => s.slot_date === formatDate(date))
                 const dayItems = [
                   ...dayActivities.map(item => ({ type: 'activity', item, sortKey: startMinutes(item.time) })),
                   ...dayEvents.map(item => ({ type: 'event', item, sortKey: startMinutes(item.time) })),
                   ...dayTrials.map(item => ({ type: 'trial', item, sortKey: startMinutes(item.time_slot) })),
+                  ...daySlots.map(item => ({ type: 'privateSlot', item, sortKey: startMinutes(item.time) })),
                 ].sort((a, b) => a.sortKey - b.sortKey)
                 const today = isToday(date)
                 const hasItems = dayItems.length > 0
@@ -1584,17 +1717,32 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               </button>
                             )
                           }
-                          const isSel = selected?.type === 'trial' && selected.data.time_slot === item.time_slot && formatDate(selected.date) === formatDate(date)
-                          const attendedCount = item.signups.filter(s => s.attended === true).length
+                          if (type === 'trial') {
+                            const isSel = selected?.type === 'trial' && selected.data.time_slot === item.time_slot && formatDate(selected.date) === formatDate(date)
+                            const attendedCount = item.signups.filter(s => s.attended === true).length
+                            return (
+                              <button key={`t-${item.time_slot}`} onClick={() => openTrialSlot(item, date)} style={{
+                                background: isSel ? '#b45309' : '#fffbeb', color: isSel ? '#fff' : '#b45309',
+                                border: isSel ? 'none' : '1px solid #fde68a',
+                                borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
+                                boxShadow: isSel ? '0 4px 12px rgba(180,83,9,0.3)' : 'none',
+                              }}>
+                                <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 שיעור ניסיון · {item.time_slot}</div>
+                                <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>{attendedCount}/{item.signups.length} הגיעו</div>
+                              </button>
+                            )
+                          }
+                          const isSel = selected?.type === 'privateSlot' && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
+                          const statusLabel = item.status === 'booked' ? '✓ תפוס' : 'פנוי'
                           return (
-                            <button key={`t-${item.time_slot}`} onClick={() => openTrialSlot(item, date)} style={{
-                              background: isSel ? '#b45309' : '#fffbeb', color: isSel ? '#fff' : '#b45309',
-                              border: isSel ? 'none' : '1px solid #fde68a',
+                            <button key={`p-${item.id}`} onClick={() => openPrivateSlot(item, date)} style={{
+                              background: isSel ? '#0e7490' : '#ecfeff', color: isSel ? '#fff' : '#0e7490',
+                              border: isSel ? 'none' : '1px solid #a5f3fc',
                               borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
-                              boxShadow: isSel ? '0 4px 12px rgba(180,83,9,0.3)' : 'none',
+                              boxShadow: isSel ? '0 4px 12px rgba(8,145,178,0.3)' : 'none',
                             }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 שיעור ניסיון · {item.time_slot}</div>
-                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>{attendedCount}/{item.signups.length} הגיעו</div>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 אימון פרטי · {item.time}</div>
+                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>₪{item.price} · {statusLabel}</div>
                             </button>
                           )
                         })}
@@ -1632,10 +1780,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     const dayActivities = inMonth ? activities.filter(a => !a.parent_activity_id && (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey)) : []
                     const dayEvents = inMonth ? getEventsForDay(dayKey, date) : []
                     const dayTrials = inMonth ? getTrialSlotsForDay(date) : []
+                    const daySlots = inMonth ? privateSlots.filter(s => s.slot_date === formatDate(date)) : []
                     const allItems = [
                       ...dayActivities.map(a => ({ type: 'activity', item: a, id: a.id, label: a.name, sortKey: startMinutes(a.time) })),
                       ...dayEvents.map(ev => ({ type: 'event', item: ev, id: ev.id, label: ev.title, sortKey: startMinutes(ev.time) })),
                       ...dayTrials.map(slot => ({ type: 'trial', item: slot, id: slot.time_slot, label: `🎾 ${slot.time_slot}`, sortKey: startMinutes(slot.time_slot) })),
+                      ...daySlots.map(slot => ({ type: 'privateSlot', item: slot, id: slot.id, label: `🎾 ${slot.time}`, sortKey: startMinutes(slot.time) })),
                     ].sort((a, b) => a.sortKey - b.sortKey)
                     const today = isToday(date)
                     return (
@@ -1651,8 +1801,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                             const isSel = selected?.type === type
                               && (type === 'trial' ? selected.data.time_slot === id : selected.data.id === id)
                               && formatDate(selected.date) === formatDate(date)
-                            const colors = type === 'activity' ? ['#1a472a', '#f0f7f0'] : type === 'event' ? ['#7c3aed', '#f5f3ff'] : ['#b45309', '#fffbeb']
-                            const onClick = type === 'activity' ? () => openActivity(item, date) : type === 'event' ? () => openAdminEvent(item, date) : () => openTrialSlot(item, date)
+                            const colors = type === 'activity' ? ['#1a472a', '#f0f7f0'] : type === 'event' ? ['#7c3aed', '#f5f3ff'] : type === 'privateSlot' ? ['#0e7490', '#ecfeff'] : ['#b45309', '#fffbeb']
+                            const onClick = type === 'activity' ? () => openActivity(item, date) : type === 'event' ? () => openAdminEvent(item, date) : type === 'privateSlot' ? () => openPrivateSlot(item, date) : () => openTrialSlot(item, date)
                             return (
                               <button key={id} onClick={onClick} style={{
                                 background: isSel ? colors[0] : colors[1],
@@ -1680,15 +1830,15 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       {selected && (
         <div className="side-panel-wrap">
         <div className="side-panel-inner" style={{
-          border: `1px solid ${selected.type === 'event' ? '#ede9fe' : selected.type === 'trial' ? '#fde68a' : '#e8ece8'}`,
-          boxShadow: `0 8px 30px ${selected.type === 'event' ? 'rgba(124,58,237,0.12)' : selected.type === 'trial' ? 'rgba(180,83,9,0.12)' : 'rgba(26,71,42,0.1)'}`,
+          border: `1px solid ${selected.type === 'event' ? '#ede9fe' : selected.type === 'trial' ? '#fde68a' : selected.type === 'privateSlot' ? '#a5f3fc' : '#e8ece8'}`,
+          boxShadow: `0 8px 30px ${selected.type === 'event' ? 'rgba(124,58,237,0.12)' : selected.type === 'trial' ? 'rgba(180,83,9,0.12)' : selected.type === 'privateSlot' ? 'rgba(8,145,178,0.12)' : 'rgba(26,71,42,0.1)'}`,
         }}>
         <div className="panel-handle" />
           {/* Panel header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
             <div>
-              <div style={{ fontWeight: '800', color: selected.type === 'event' ? '#7c3aed' : selected.type === 'trial' ? '#b45309' : '#1a472a', fontSize: '17px' }}>
-                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.data.name}
+              <div style={{ fontWeight: '800', color: selected.type === 'event' ? '#7c3aed' : selected.type === 'trial' ? '#b45309' : selected.type === 'privateSlot' ? '#0e7490' : '#1a472a', fontSize: '17px' }}>
+                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.type === 'privateSlot' ? `🎾 אימון פרטי · ${selected.data.time}` : selected.data.name}
               </div>
               {selected.type === 'trial' && (
                 <div style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>{selected.data.age_group}</div>
@@ -1886,6 +2036,55 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               </div>
             )
           })()}
+
+          {/* ── Private slot panel ── */}
+          {selected.type === 'privateSlot' && (
+            loadingSlotBooking ? <LoadingSpinner /> : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ fontSize: '13px', color: '#555', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div>💰 ₪{selected.data.price} · ⏱ {selected.data.duration_minutes} דקות</div>
+                  {selected.data.location_id && locations.find(l => l.id === selected.data.location_id) && (
+                    <div>📍 {locations.find(l => l.id === selected.data.location_id).name}</div>
+                  )}
+                  {selected.data.notes && <div>📝 {selected.data.notes}</div>}
+                </div>
+
+                <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '800', color: '#0e7490', marginBottom: '10px' }}>הרשמה</div>
+                  {!slotBooking ? (
+                    <p style={{ color: '#ccc', textAlign: 'center', fontSize: '13px' }}>עדיין אין הרשמה למשבצת זו</p>
+                  ) : (
+                    <div style={{
+                      display: 'flex', flexDirection: 'column', gap: '6px',
+                      background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '12px', padding: '12px 14px',
+                    }}>
+                      <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{slotBooking.player?.name}</div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>{slotBooking.profile?.full_name || ''} {slotBooking.profile?.phone || ''}</div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                        <span style={{
+                          fontSize: '11px', fontWeight: '700', borderRadius: '20px', padding: '3px 9px',
+                          color: slotBooking.status === 'active' ? '#16a34a' : '#b45309',
+                          background: slotBooking.status === 'active' ? '#dcfce7' : '#fef3c7',
+                        }}>{slotBooking.status === 'active' ? 'שולם ✓' : 'ממתין לתשלום'}</span>
+                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : 'תשלום מיידי'}</span>
+                      </div>
+                      {slotBooking.status === 'pending' && (
+                        <button onClick={confirmSlotBookingPayment} disabled={confirmingBooking} style={{
+                          marginTop: '8px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px',
+                          padding: '9px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', opacity: confirmingBooking ? 0.6 : 1,
+                        }}>{confirmingBooking ? 'מאשר...' : 'אשר תשלום'}</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <button onClick={() => deletePrivateSlot(selected.data)} disabled={deletingSlot} style={{
+                  background: '#fff', color: '#dc2626', border: '1px solid #fecaca', borderRadius: '10px',
+                  padding: '10px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', opacity: deletingSlot ? 0.6 : 1,
+                }}>{deletingSlot ? 'מוחק...' : 'מחק משבצת'}</button>
+              </div>
+            )
+          )}
 
           {/* ── Event panel ── */}
           {selected.type === 'event' && (
