@@ -382,9 +382,12 @@ export default function AdminSettings() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <Field label="חבילה 1 — מספר שיעורים" value={g('package_option1_sessions')} onChange={v => set('package_option1_sessions', v)} />
               <Field label="חבילה 1 — מחיר (₪)" value={g('package_option1_price')} onChange={v => set('package_option1_price', v)} />
-              <Field label="חבילה 2 — מספר שיעורים" value={g('package_option2_sessions')} onChange={v => set('package_option2_sessions', v)} />
-              <Field label="חבילה 2 — מחיר (₪)" value={g('package_option2_price')} onChange={v => set('package_option2_price', v)} />
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '14px' }}>
+              <Field label="חבילה 2 (אופציונלי) — מספר שיעורים" value={g('package_option2_sessions')} onChange={v => set('package_option2_sessions', v)} />
+              <Field label="חבילה 2 (אופציונלי) — מחיר (₪)" value={g('package_option2_price')} onChange={v => set('package_option2_price', v)} />
+            </div>
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>חבילה 2 ריקה = מוצגת רק חבילה אחת ללקוחות</div>
             <div style={{ marginTop: '14px' }}>
               <Field label="קישור לתשלום עבור רכישת חבילה" value={g('package_payment_link')} onChange={v => set('package_payment_link', v)} />
               <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = קישור התשלום הכללי של האקדמיה</div>

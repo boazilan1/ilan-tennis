@@ -1020,7 +1020,7 @@ const outlineBtn = { background: '#fff', color: '#444', border: '1px solid #ddd'
 
 /* ─── Calendar Tab ─── */
 const EMPTY_EVENT_FORM = { title: '', description: '', is_recurring: false, day_of_week: 'sunday', event_date: '', time: '' }
-const EMPTY_SLOT_FORM = { slot_date: '', time: '', duration_minutes: '45', price: '', location_id: '', payment_link: '', notes: '' }
+const EMPTY_SLOT_FORM = { slot_date: '', time: '', duration_minutes: '45', price: '200', location_id: '', payment_link: '', notes: '' }
 const STATUS_EVENT = {
   scheduled: { label: 'מתוכנן',    color: '#d97706', bg: '#fef3c7' },
   completed: { label: 'בוצע ✓',    color: '#16a34a', bg: '#dcfce7' },

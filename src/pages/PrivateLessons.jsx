@@ -15,8 +15,24 @@ const inputStyle = {
 }
 const labelStyle = { display: 'block', fontWeight: '700', fontSize: '14px', color: '#333', marginBottom: '6px' }
 
+const DAYS_HE = { sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי', wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת' }
+const DAYS_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+
 function formatDateHe(dateStr) {
   return new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })
+}
+
+function formatDateISO(date) { return date.toISOString().split('T')[0] }
+
+function getWeekDays(weekOffset) {
+  const today = new Date()
+  const sunday = new Date(today)
+  sunday.setDate(today.getDate() - today.getDay() + weekOffset * 7)
+  return DAYS_ORDER.map((key, i) => {
+    const d = new Date(sunday)
+    d.setDate(sunday.getDate() + i)
+    return { key, date: d }
+  })
 }
 
 export default function PrivateLessons() {
@@ -48,6 +64,7 @@ export default function PrivateLessons() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [bookedActive, setBookedActive] = useState(false)
+  const [weekOffset, setWeekOffset] = useState(0)
 
   useEffect(() => {
     if (authLoading) return
@@ -65,7 +82,7 @@ export default function PrivateLessons() {
       const opts = []
       if (s.package_option1_sessions && s.package_option1_price) opts.push({ sessions: Number(s.package_option1_sessions), price: Number(s.package_option1_price) })
       if (s.package_option2_sessions && s.package_option2_price) opts.push({ sessions: Number(s.package_option2_sessions), price: Number(s.package_option2_price) })
-      setPackageOptions(opts.length ? opts : [{ sessions: 5, price: 600 }, { sessions: 10, price: 1100 }])
+      setPackageOptions(opts.length ? opts : [{ sessions: 5, price: 900 }])
 
       const [playersRes, locRes] = await Promise.all([
         supabase.from('players').select('*').eq('user_id', user.id).order('created_at'),
@@ -375,7 +392,14 @@ export default function PrivateLessons() {
     )
   }
 
-  // ── Browse open slots ──
+  // ── Browse open slots, week by week ──
+  const weekDays = getWeekDays(weekOffset)
+  const weekLabel = (() => {
+    const s = weekDays[0].date, e = weekDays[6].date
+    return `${s.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })} – ${e.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}`
+  })()
+  const todayStr = formatDateISO(new Date())
+
   return (
     <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3', padding: '40px 20px' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
@@ -386,28 +410,62 @@ export default function PrivateLessons() {
           padding: '16px 20px', marginBottom: '28px', textDecoration: 'none', color: '#0e7490', fontWeight: '700',
         }}>💳 רכישת חבילת אימונים →</Link>
 
-        {slots.length === 0 ? (
-          <p style={{ color: '#bbb', textAlign: 'center', padding: '24px 0' }}>אין משבצות פנויות כרגע</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {slots.map(s => (
-              <button key={s.id} onClick={() => navigate(`/private-lessons?slot=${s.id}`)} style={{
-                background: 'white', border: '1px solid #e8ece8', borderRight: '4px solid #0e7490',
-                borderRadius: '14px', padding: '16px 20px', cursor: 'pointer', textAlign: 'right',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px',
-              }}>
-                <div>
-                  <div style={{ fontWeight: '800', fontSize: '16px', color: '#0e7490' }}>{formatDateHe(s.slot_date)}</div>
-                  <div style={{ fontSize: '13px', color: '#666', marginTop: '2px' }}>
-                    🕐 {s.time}
-                    {s.location_id && locations.find(l => l.id === s.location_id) && ` · 📍 ${locations.find(l => l.id === s.location_id).name}`}
-                  </div>
-                </div>
-                <div style={{ fontSize: '17px', fontWeight: '800', color: '#1a472a' }}>₪{s.price}</div>
-              </button>
-            ))}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <button onClick={() => setWeekOffset(w => w - 1)} disabled={weekOffset === 0} style={{
+            background: 'none', border: '1px solid #ddd', borderRadius: '8px', padding: '6px 14px',
+            cursor: weekOffset === 0 ? 'default' : 'pointer', fontSize: '13px', color: weekOffset === 0 ? '#ccc' : '#555',
+          }}>קודם ▶</button>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontWeight: '700', color: '#1a472a', fontSize: '15px' }}>{weekLabel}</div>
+            {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} style={{ background: 'none', border: 'none', color: '#999', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' }}>השבוע הנוכחי</button>}
           </div>
-        )}
+          <button onClick={() => setWeekOffset(w => w + 1)} style={{
+            background: 'none', border: '1px solid #ddd', borderRadius: '8px', padding: '6px 14px',
+            cursor: 'pointer', fontSize: '13px', color: '#555',
+          }}>◀ הבא</button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {weekDays.map(({ key, date }) => {
+            const dateStr = formatDateISO(date)
+            if (dateStr < todayStr) return null
+            const daySlots = slots.filter(s => s.slot_date === dateStr)
+            const isToday = dateStr === todayStr
+            return (
+              <div key={key} style={{
+                background: isToday ? '#f0fdf4' : '#fff',
+                border: isToday ? '2px solid #1a472a' : '1px solid #eee',
+                borderRadius: '14px', padding: '14px 18px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: daySlots.length ? '10px' : 0 }}>
+                  <div style={{ minWidth: '80px' }}>
+                    <div style={{ fontWeight: '700', color: isToday ? '#1a472a' : '#222', fontSize: '14px' }}>יום {DAYS_HE[key]}</div>
+                    <div style={{ fontSize: '12px', color: '#bbb' }}>
+                      {date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}
+                      {isToday && <span style={{ color: '#16a34a', fontWeight: '700' }}> · היום</span>}
+                    </div>
+                  </div>
+                  {daySlots.length === 0 && <span style={{ color: '#ddd', fontSize: '13px' }}>אין אימונים פנויים</span>}
+                </div>
+                {daySlots.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {daySlots.map(s => (
+                      <button key={s.id} onClick={() => navigate(`/private-lessons?slot=${s.id}`)} style={{
+                        background: '#ecfeff', color: '#0e7490', border: '1px solid #a5f3fc',
+                        borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
+                      }}>
+                        <div style={{ fontSize: '13px', fontWeight: '700' }}>🕐 {s.time} · ₪{s.price}</div>
+                        {s.location_id && locations.find(l => l.id === s.location_id) && (
+                          <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>📍 {locations.find(l => l.id === s.location_id).name}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </main>
   )
