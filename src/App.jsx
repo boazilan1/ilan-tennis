@@ -17,6 +17,7 @@ import Nokdim from './pages/Nokdim'
 import GivatZeev from './pages/GivatZeev'
 import TrialLesson from './pages/TrialLesson'
 import PrivateLessons from './pages/PrivateLessons'
+import MyAccount from './pages/MyAccount'
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
             <Route path="/givat-zeev" element={<GivatZeev />} />
             <Route path="/trial-lesson" element={<TrialLesson />} />
             <Route path="/private-lessons" element={<PrivateLessons />} />
+            <Route path="/my-account" element={<MyAccount />} />
             <Route path="/page/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer />

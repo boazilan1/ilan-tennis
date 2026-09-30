@@ -76,10 +76,10 @@ export default function Header() {
           ))}
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginRight: '8px', borderRight: '1px solid rgba(255,255,255,0.3)', paddingRight: '16px' }}>
-              <span style={{ fontSize: '14px', opacity: 0.9 }}>
+              <Link to="/my-account" style={{ fontSize: '14px', opacity: 0.9, color: 'white', textDecoration: 'none' }}>
                 שלום, {profile?.full_name?.split(' ')[0] || 'משתמש'}
                 {isAdmin && <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: '4px', padding: '2px 6px', marginRight: '6px', fontSize: '12px' }}>מנהל</span>}
-              </span>
+              </Link>
               <button onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: '6px', padding: '6px 14px', cursor: 'pointer', fontSize: '14px' }}>יציאה</button>
             </div>
           ) : (
@@ -116,10 +116,15 @@ export default function Header() {
           ))}
           {user ? (
             <>
-              <div style={{ padding: '12px 8px', fontSize: '14px', opacity: 0.85 }}>
-                שלום, {profile?.full_name?.split(' ')[0] || 'משתמש'}
+              <Link to="/my-account" onClick={() => setMenuOpen(false)} style={{
+                color: 'white', textDecoration: 'none', padding: '12px 8px', borderRadius: '8px',
+                fontWeight: location.pathname === '/my-account' ? 'bold' : 'normal',
+                background: location.pathname === '/my-account' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                fontSize: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)',
+              }}>
+                האזור האישי שלי — {profile?.full_name?.split(' ')[0] || 'משתמש'}
                 {isAdmin && <span style={{ background: 'rgba(255,255,255,0.25)', borderRadius: '4px', padding: '2px 6px', marginRight: '6px', fontSize: '12px' }}>מנהל</span>}
-              </div>
+              </Link>
               <button onClick={handleLogout} style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.4)', borderRadius: '8px', padding: '12px', cursor: 'pointer', fontSize: '15px', textAlign: 'center' }}>יציאה</button>
             </>
           ) : (
