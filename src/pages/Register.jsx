@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
-import SignaturePad from '../components/SignaturePad'
 import { computeBillingPlan, getActivityDaysOfWeek } from '../lib/billing'
 
 const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לחוג, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
@@ -50,8 +49,6 @@ export default function Register() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsText, setTermsText] = useState(DEFAULT_TERMS)
   const [termsFileUrl, setTermsFileUrl] = useState('')
-  const [signatureName, setSignatureName] = useState('')
-  const [signatureData, setSignatureData] = useState('')
   const [registrationPaused, setRegistrationPaused] = useState(false)
   const [pausedMessage, setPausedMessage] = useState('')
   const [settingsLoaded, setSettingsLoaded] = useState(false)
@@ -113,11 +110,6 @@ export default function Register() {
       return
     }
 
-    if (!signatureData) {
-      setError('יש לחתום בעזרת האצבע או העכבר')
-      return
-    }
-
     setSubmitting(true)
 
     try {
@@ -161,7 +153,7 @@ export default function Register() {
       }
 
       const { data: newEnrollment, error: enrollError } = await supabase
-        .rpc('upsert_registration', { p_player_id: playerId, p_activity_id: effectiveActivity.id, p_signature_name: signatureName.trim(), p_signature_data: signatureData })
+        .rpc('upsert_registration', { p_player_id: playerId, p_activity_id: effectiveActivity.id, p_signature_name: null, p_signature_data: null })
         .select()
         .single()
 
@@ -627,24 +619,6 @@ export default function Register() {
           </span>
         </label>
 
-        <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>
-            שם מלא לחתימה (רשות)
-          </label>
-          <input
-            type="text"
-            value={signatureName}
-            onChange={e => setSignatureName(e.target.value)}
-            placeholder="הקלד/י את שמך המלא"
-            style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #ccc', fontSize: '15px', boxSizing: 'border-box', marginBottom: '10px' }}
-          />
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>
-            חתימה <span style={{ color: '#c00' }}>*</span>
-          </label>
-          <SignaturePad onChange={setSignatureData} />
-          <div style={{ fontSize: '11px', color: '#aaa', marginTop: '4px' }}>החתימה מהווה אישור דיגיטלי להרשמה ולתנאיה</div>
-        </div>
-
         {error && (
           <p style={{ color: '#c00', background: '#fff0f0', padding: '10px', borderRadius: '8px', margin: 0, fontSize: '14px' }}>
             {error}
@@ -653,7 +627,7 @@ export default function Register() {
 
         <button
           type="submit"
-          disabled={submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId) || (track === 'single' && !chosenDay)}
+          disabled={submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId) || (track === 'single' && !chosenDay)}
           style={{
             background: '#1a472a',
             color: '#fff',
@@ -663,7 +637,7 @@ export default function Register() {
             fontSize: '16px',
             fontWeight: 'bold',
             cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: (submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
+            opacity: (submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
           }}
         >
           {submitting ? 'רושם...' : 'אישור הרשמה'}

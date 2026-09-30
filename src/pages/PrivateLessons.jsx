@@ -3,7 +3,6 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
-import SignaturePad from '../components/SignaturePad'
 
 const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לאימון הפרטי, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
 const DEFAULT_PAYMENT_LINK = 'https://mrng.to/yLXsO2hg8s'
@@ -69,8 +68,6 @@ export default function PrivateLessons() {
   const [paymentMethod, setPaymentMethod] = useState('immediate')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsText, setTermsText] = useState(DEFAULT_TERMS)
-  const [signatureName, setSignatureName] = useState('')
-  const [signatureData, setSignatureData] = useState('')
   const [packageOptions, setPackageOptions] = useState([])
   const [packagePaymentLink, setPackagePaymentLink] = useState('')
   const [selectedPackage, setSelectedPackage] = useState(0)
@@ -130,7 +127,6 @@ export default function PrivateLessons() {
     e.preventDefault()
     setError('')
     if (!termsAccepted) { setError('יש לאשר את תנאי ההרשמה כדי להמשיך'); return }
-    if (!signatureData) { setError('יש לחתום בעזרת האצבע או העכבר'); return }
 
     setSubmitting(true)
     try {
@@ -150,7 +146,7 @@ export default function PrivateLessons() {
       const { data: booking, error: bookError } = await supabase
         .rpc('book_private_slot', {
           p_player_id: playerId, p_slot_id: slot.id, p_payment_method: paymentMethod,
-          p_signature_name: signatureName.trim(), p_signature_data: signatureData,
+          p_signature_name: null, p_signature_data: null,
         })
         .select().single()
 
@@ -393,20 +389,12 @@ export default function PrivateLessons() {
             <span style={{ fontSize: '13px', color: '#444', lineHeight: 1.6 }}>{termsText}</span>
           </label>
 
-          <div>
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>שם מלא לחתימה (רשות)</label>
-            <input type="text" value={signatureName} onChange={e => setSignatureName(e.target.value)} placeholder="הקלד/י את שמך המלא"
-              style={{ ...inputStyle, marginBottom: '10px' }} />
-            <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px', color: '#333' }}>חתימה <span style={{ color: '#c00' }}>*</span></label>
-            <SignaturePad onChange={setSignatureData} />
-          </div>
-
           {error && <p style={{ color: '#c00', background: '#fff0f0', padding: '10px', borderRadius: '8px', margin: 0, fontSize: '14px' }}>{error}</p>}
 
-          <button type="submit" disabled={submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)} style={{
+          <button type="submit" disabled={submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)} style={{
             background: '#1a472a', color: '#fff', border: 'none', borderRadius: '8px', padding: '14px',
             fontSize: '16px', fontWeight: 'bold', cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: (submitting || !termsAccepted || !signatureData || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
+            opacity: (submitting || !termsAccepted || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
           }}>
             {submitting ? 'רושם...' : paymentMethod === 'balance' ? 'אישור הרשמה' : 'המשך לתשלום'}
           </button>
