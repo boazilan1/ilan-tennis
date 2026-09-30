@@ -181,11 +181,12 @@ $$;
 
 grant execute on function mark_package_payment_redirect(uuid) to authenticated;
 
--- Default package pricing, editable later from Admin Settings.
+-- Default package pricing, editable later from Admin Settings. Payment is
+-- created dynamically per purchase (see api/private-payment.js) for the
+-- exact package amount, so no static payment link is stored here.
 insert into site_settings (key, value) values
-  ('package_option1_sessions', '5'),
-  ('package_option1_price', '600'),
-  ('package_option2_sessions', '10'),
-  ('package_option2_price', '1100'),
-  ('package_payment_link', '')
+  ('package_option1_sessions', '1'),
+  ('package_option1_price', '200'),
+  ('package_option2_sessions', '5'),
+  ('package_option2_price', '900')
 on conflict (key) do nothing;

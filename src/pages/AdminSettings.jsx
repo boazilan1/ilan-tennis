@@ -21,7 +21,7 @@ const ALL_KEYS = [
   'givatzeev_intro_title','givatzeev_intro_text','givatzeev_image_url','givatzeev_image_pos_x','givatzeev_image_pos_y',
   'givatzeev_external_url','givatzeev_external_label',
   'register_terms_text','register_terms_file_url',
-  'package_option1_sessions','package_option1_price','package_option2_sessions','package_option2_price','package_payment_link',
+  'package_option1_sessions','package_option1_price','package_option2_sessions','package_option2_price',
 ]
 
 function SizeInput({ value, onChange }) {
@@ -387,11 +387,7 @@ export default function AdminSettings() {
               <Field label="חבילה 2 (אופציונלי) — מספר שיעורים" value={g('package_option2_sessions')} onChange={v => set('package_option2_sessions', v)} />
               <Field label="חבילה 2 (אופציונלי) — מחיר (₪)" value={g('package_option2_price')} onChange={v => set('package_option2_price', v)} />
             </div>
-            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>חבילה 2 ריקה = מוצגת רק חבילה אחת ללקוחות</div>
-            <div style={{ marginTop: '14px' }}>
-              <Field label="קישור לתשלום עבור רכישת חבילה" value={g('package_payment_link')} onChange={v => set('package_payment_link', v)} />
-              <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>ריק = קישור התשלום הכללי של האקדמיה</div>
-            </div>
+            <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>חבילה 2 ריקה = מוצגת רק חבילה אחת ללקוחות. התשלום נוצר אוטומטית בסכום המדויק של החבילה שנבחרה — אין צורך בקישור תשלום נפרד.</div>
           </Card>
 
           <Card title="דף יצירת קשר — כותרת עליונה">

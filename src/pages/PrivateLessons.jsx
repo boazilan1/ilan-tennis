@@ -69,7 +69,6 @@ export default function PrivateLessons() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsText, setTermsText] = useState(DEFAULT_TERMS)
   const [packageOptions, setPackageOptions] = useState([])
-  const [packagePaymentLink, setPackagePaymentLink] = useState('')
   const [selectedPackage, setSelectedPackage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -84,16 +83,15 @@ export default function PrivateLessons() {
     async function load() {
       const settingsRes = await supabase.from('site_settings').select('key, value').in('key', [
         'register_terms_text', 'package_option1_sessions', 'package_option1_price',
-        'package_option2_sessions', 'package_option2_price', 'package_payment_link',
+        'package_option2_sessions', 'package_option2_price',
       ])
       const s = {}
       settingsRes.data?.forEach(r => { if (r.value) s[r.key] = r.value })
       if (s.register_terms_text) setTermsText(s.register_terms_text)
-      setPackagePaymentLink(s.package_payment_link || '')
       const opts = []
       if (s.package_option1_sessions && s.package_option1_price) opts.push({ sessions: Number(s.package_option1_sessions), price: Number(s.package_option1_price) })
       if (s.package_option2_sessions && s.package_option2_price) opts.push({ sessions: Number(s.package_option2_sessions), price: Number(s.package_option2_price) })
-      setPackageOptions(opts.length ? opts : [{ sessions: 5, price: 900 }])
+      setPackageOptions(opts.length ? opts : [{ sessions: 1, price: 200 }, { sessions: 5, price: 900 }])
 
       const [playersRes, locRes] = await Promise.all([
         supabase.from('players').select('*').eq('user_id', user.id).order('created_at'),
@@ -167,7 +165,25 @@ export default function PrivateLessons() {
       }
 
       sessionStorage.setItem('ilan_pending_private_booking', JSON.stringify({ id: booking.id, kind: 'privateBooking' }))
-      window.location.href = slot.payment_link || DEFAULT_PAYMENT_LINK
+
+      let paymentUrl = slot.payment_link || DEFAULT_PAYMENT_LINK
+      try {
+        const payRes = await fetch('/api/private-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'privateBooking', id: booking.id }),
+        })
+        if (payRes.ok) {
+          const payData = await payRes.json()
+          if (payData.url) paymentUrl = payData.url
+        } else {
+          console.error('private-payment failed, falling back to static payment link')
+        }
+      } catch (payErr) {
+        console.error('private-payment request failed, falling back to static payment link', payErr)
+      }
+
+      window.location.href = paymentUrl
     } catch (err) {
       setError('אירעה שגיאה, נסה שוב')
       console.error(err)
@@ -200,7 +216,25 @@ export default function PrivateLessons() {
       if (pkgError) throw pkgError
 
       sessionStorage.setItem('ilan_pending_private_booking', JSON.stringify({ id: newPackage.id, kind: 'package' }))
-      window.location.href = packagePaymentLink || DEFAULT_PAYMENT_LINK
+
+      let paymentUrl = DEFAULT_PAYMENT_LINK
+      try {
+        const payRes = await fetch('/api/private-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'package', id: newPackage.id }),
+        })
+        if (payRes.ok) {
+          const payData = await payRes.json()
+          if (payData.url) paymentUrl = payData.url
+        } else {
+          console.error('private-payment failed, falling back to static payment link')
+        }
+      } catch (payErr) {
+        console.error('private-payment request failed, falling back to static payment link', payErr)
+      }
+
+      window.location.href = paymentUrl
     } catch (err) {
       setError('אירעה שגיאה, נסה שוב')
       console.error(err)
@@ -284,7 +318,7 @@ export default function PrivateLessons() {
                     }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <input type="radio" name="pkg" checked={selectedPackage === i} onChange={() => setSelectedPackage(i)} />
-                        <span style={{ fontWeight: '700' }}>{pkg.sessions} אימונים</span>
+                        <span style={{ fontWeight: '700' }}>{pkg.sessions === 1 ? 'אימון אחד' : `${pkg.sessions} אימונים`}</span>
                       </span>
                       <span style={{ fontWeight: '800', color: '#1a472a' }}>₪{pkg.price}</span>
                     </label>
