@@ -24,6 +24,20 @@ function formatDateHe(dateStr) {
 
 function formatDateISO(date) { return date.toISOString().split('T')[0] }
 
+const MAX_WEEK_OFFSET = 1 // browsing/booking is limited to the next two weeks
+const MIN_NOTICE_HOURS = 3
+
+function slotDateTime(slotDate, time) {
+  const [h, m] = (time || '0:0').split(':').map(Number)
+  const d = new Date(slotDate)
+  d.setHours(h || 0, m || 0, 0, 0)
+  return d
+}
+
+function isTooLateToBook(slotDate, time) {
+  return slotDateTime(slotDate, time).getTime() - Date.now() < MIN_NOTICE_HOURS * 60 * 60 * 1000
+}
+
 function getWeekDays(weekOffset) {
   const today = new Date()
   const sunday = new Date(today)
@@ -144,6 +158,7 @@ export default function PrivateLessons() {
         if (bookError.message?.includes('SLOT_UNAVAILABLE')) setError('המשבצת הזו כבר לא פנויה')
         else if (bookError.message?.includes('ALREADY_BOOKED')) setError('כבר נרשמת למשבצת זו')
         else if (bookError.message?.includes('NO_BALANCE')) setError('אין יתרת אימונים פעילה לשחקן/ית זה')
+        else if (bookError.message?.includes('TOO_LATE')) setError(`ההרשמה למשבצת זו נסגרה — יש להירשם עד ${MIN_NOTICE_HOURS} שעות לפני האימון`)
         else throw bookError
         setSubmitting(false)
         return
@@ -316,6 +331,14 @@ export default function PrivateLessons() {
         </main>
       )
     }
+    if (isTooLateToBook(slot.slot_date, slot.time)) {
+      return (
+        <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '60px auto', padding: '0 20px', textAlign: 'center' }}>
+          <p style={{ color: '#c00' }}>ההרשמה למשבצת זו נסגרה — יש להירשם עד {MIN_NOTICE_HOURS} שעות לפני האימון</p>
+          <Link to="/private-lessons" style={{ color: '#1a472a' }}>חזרה ליומן</Link>
+        </main>
+      )
+    }
     const hasBalance = selectedPlayerId && balanceByPlayer[selectedPlayerId] > 0
     return (
       <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '40px auto', padding: '0 20px' }}>
@@ -419,17 +442,20 @@ export default function PrivateLessons() {
             <div style={{ fontWeight: '700', color: '#1a472a', fontSize: '15px' }}>{weekLabel}</div>
             {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} style={{ background: 'none', border: 'none', color: '#999', fontSize: '12px', cursor: 'pointer', textDecoration: 'underline', marginTop: '2px' }}>השבוע הנוכחי</button>}
           </div>
-          <button onClick={() => setWeekOffset(w => w + 1)} style={{
+          <button onClick={() => setWeekOffset(w => Math.min(w + 1, MAX_WEEK_OFFSET))} disabled={weekOffset === MAX_WEEK_OFFSET} style={{
             background: 'none', border: '1px solid #ddd', borderRadius: '8px', padding: '6px 14px',
-            cursor: 'pointer', fontSize: '13px', color: '#555',
+            cursor: weekOffset === MAX_WEEK_OFFSET ? 'default' : 'pointer', fontSize: '13px', color: weekOffset === MAX_WEEK_OFFSET ? '#ccc' : '#555',
           }}>◀ הבא</button>
         </div>
+        <p style={{ textAlign: 'center', color: '#aaa', fontSize: '12px', marginTop: '-10px', marginBottom: '18px' }}>
+          ניתן להירשם עד שבועיים מראש, ולכל המאוחר {MIN_NOTICE_HOURS} שעות לפני האימון
+        </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {weekDays.map(({ key, date }) => {
             const dateStr = formatDateISO(date)
             if (dateStr < todayStr) return null
-            const daySlots = slots.filter(s => s.slot_date === dateStr)
+            const daySlots = slots.filter(s => s.slot_date === dateStr && !isTooLateToBook(s.slot_date, s.time))
             const isToday = dateStr === todayStr
             return (
               <div key={key} style={{

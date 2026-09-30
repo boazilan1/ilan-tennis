@@ -1425,9 +1425,10 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   }
 
   async function deletePrivateSlot(slot) {
+    const recurringNote = slot.template_id ? ' זו משבצת קבועה — אם לא תבטלו את התבנית, היא תיווצר שוב באופן אוטומטי.' : ''
     const warning = slotBooking
-      ? `למשבצת הזו יש הרשמה של ${slotBooking.player?.name}. למחוק בכל זאת? ${slotBooking.payment_method === 'balance' ? 'השיעור יוחזר ליתרה שלו.' : ''}`
-      : 'למחוק את המשבצת הזו?'
+      ? `למשבצת הזו יש הרשמה של ${slotBooking.player?.name}. למחוק בכל זאת? ${slotBooking.payment_method === 'balance' ? 'השיעור יוחזר ליתרה שלו.' : ''}${recurringNote}`
+      : `למחוק את המשבצת הזו?${recurringNote}`
     if (!window.confirm(warning)) return
     setDeletingSlot(true)
     if (slotBooking?.payment_method === 'balance') {
@@ -1741,7 +1742,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
                               boxShadow: isSel ? '0 4px 12px rgba(8,145,178,0.3)' : 'none',
                             }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 אימון פרטי · {item.time}</div>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 אימון פרטי · {item.time}{item.template_id ? ' 🔁' : ''}</div>
                               <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>₪{item.price} · {statusLabel}</div>
                             </button>
                           )
@@ -1838,7 +1839,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
             <div>
               <div style={{ fontWeight: '800', color: selected.type === 'event' ? '#7c3aed' : selected.type === 'trial' ? '#b45309' : selected.type === 'privateSlot' ? '#0e7490' : '#1a472a', fontSize: '17px' }}>
-                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.type === 'privateSlot' ? `🎾 אימון פרטי · ${selected.data.time}` : selected.data.name}
+                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.type === 'privateSlot' ? `🎾 אימון פרטי · ${selected.data.time}${selected.data.template_id ? ' 🔁' : ''}` : selected.data.name}
               </div>
               {selected.type === 'trial' && (
                 <div style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>{selected.data.age_group}</div>
@@ -2047,6 +2048,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     <div>📍 {locations.find(l => l.id === selected.data.location_id).name}</div>
                   )}
                   {selected.data.notes && <div>📝 {selected.data.notes}</div>}
+                  {selected.data.template_id && <div style={{ color: '#0e7490' }}>🔁 משבצת קבועה — נוצרת אוטומטית כל שבוע</div>}
                 </div>
 
                 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>

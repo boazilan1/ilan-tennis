@@ -67,6 +67,24 @@ export default function Home() {
         <SectionCurve fill="#f5f5f5" />
       </section>
 
+      {/* Private lessons CTA */}
+      <section style={{ maxWidth: '760px', margin: '28px auto 0', padding: '0 20px' }}>
+        <Link to="/private-lessons" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap',
+          background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '18px',
+          padding: '22px 28px', textDecoration: 'none',
+        }}>
+          <div>
+            <div style={{ color: '#0e7490', fontWeight: '800', fontSize: '18px', marginBottom: '4px' }}>🎾 מחפשים אימון פרטי?</div>
+            <div style={{ color: '#155e75', fontSize: '14px' }}>בחרו יום ושעה מהיומן והירשמו תוך דקה</div>
+          </div>
+          <span style={{
+            background: '#0e7490', color: '#fff', padding: '11px 26px', borderRadius: '30px',
+            fontWeight: '700', fontSize: '14px', whiteSpace: 'nowrap',
+          }}>להזמנת אימון →</span>
+        </Link>
+      </section>
+
       {/* Vision */}
       <section style={{ maxWidth: '760px', margin: '60px auto 0', padding: '0 20px' }}>
         <div style={{ background: 'white', borderRadius: '18px', padding: '36px 32px', boxShadow: '0 2px 12px rgba(0,0,0,0.06)', borderTop: '4px solid var(--sand)' }}>
