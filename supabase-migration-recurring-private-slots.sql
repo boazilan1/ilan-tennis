@@ -49,11 +49,11 @@ begin
 end;
 $$;
 
--- Wednesday 08:00 in Givat Ze'ev, Monday & Thursday 08:15 in Nokdim.
+-- Wednesday 20:00 in Givat Ze'ev, Monday & Thursday 20:15 in Nokdim.
 insert into recurring_private_slot_templates (weekday, time, duration_minutes, price, location_id) values
-  (3, '08:00', 45, 200, '3249426d-5263-4121-a8b5-0655907478ac'),
-  (1, '08:15', 45, 200, 'bb00d486-7d6e-40b7-8cec-238277415200'),
-  (4, '08:15', 45, 200, 'bb00d486-7d6e-40b7-8cec-238277415200');
+  (3, '20:00', 45, 200, '3249426d-5263-4121-a8b5-0655907478ac'),
+  (1, '20:15', 45, 200, 'bb00d486-7d6e-40b7-8cec-238277415200'),
+  (4, '20:15', 45, 200, 'bb00d486-7d6e-40b7-8cec-238277415200');
 
 select ensure_recurring_private_slots();
 
