@@ -1049,6 +1049,8 @@ function CalendarTab() {
   const [slotBooking, setSlotBooking] = useState(null)
   const [loadingSlotBooking, setLoadingSlotBooking] = useState(false)
   const [confirmingBooking, setConfirmingBooking] = useState(false)
+  const [newBookingPaymentMethod, setNewBookingPaymentMethod] = useState('immediate')
+  const [addingSlotPlayer, setAddingSlotPlayer] = useState(false)
   const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
   const [showAddPerson, setShowAddPerson] = useState(false)
   const [walkInName, setWalkInName] = useState('')
@@ -1448,7 +1450,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
   async function openPrivateSlot(slot, date) {
     setSelected({ type: 'privateSlot', data: slot, date })
-    setShowEventForm(false); setShowSlotForm(false)
+    setShowEventForm(false); setShowSlotForm(false); setAddPlayerSearch(''); setShowAddPerson(false)
+    setNewBookingPaymentMethod('immediate')
     setSlotBooking(null); setLoadingSlotBooking(true)
     const { data } = await supabase.from('private_slot_bookings')
       .select('id, payment_method, status, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
@@ -1463,6 +1466,33 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     await supabase.from('private_slot_bookings').update({ status: 'active' }).eq('id', slotBooking.id)
     setSlotBooking(prev => ({ ...prev, status: 'active' }))
     setConfirmingBooking(false)
+  }
+
+  async function addPlayerToPrivateSlot(playerId, paymentMethod) {
+    setAddingSlotPlayer(true)
+    const player = allPlayers.find(p => p.id === playerId)
+    let packageId = null
+    let status = 'pending'
+    if (paymentMethod === 'balance') {
+      const { data: pkg } = await supabase.from('lesson_packages')
+        .select('id, remaining_sessions').eq('player_id', playerId).eq('status', 'active').gt('remaining_sessions', 0)
+        .order('created_at').limit(1).maybeSingle()
+      if (!pkg) { alert('לשחקן/ית זה אין יתרת אימונים פעילה'); setAddingSlotPlayer(false); return }
+      await supabase.from('lesson_packages').update({
+        remaining_sessions: pkg.remaining_sessions - 1,
+        status: pkg.remaining_sessions - 1 <= 0 ? 'depleted' : 'active',
+      }).eq('id', pkg.id)
+      packageId = pkg.id
+      status = 'active'
+    }
+    const { data: booking } = await supabase.from('private_slot_bookings')
+      .insert({ slot_id: selected.data.id, player_id: playerId, user_id: player?.user_id, package_id: packageId, payment_method: paymentMethod, status })
+      .select('id, payment_method, status, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .single()
+    await supabase.from('private_slots').update({ status: 'booked' }).eq('id', selected.data.id)
+    setPrivateSlots(prev => prev.map(s => s.id === selected.data.id ? { ...s, status: 'booked' } : s))
+    if (booking) setSlotBooking(booking)
+    setAddPlayerSearch(''); setShowAddPerson(false); setAddingSlotPlayer(false)
   }
 
   async function deletePrivateSlot(slot) {
@@ -2119,7 +2149,47 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
                   <div style={{ fontSize: '13px', fontWeight: '800', color: '#0e7490', marginBottom: '10px' }}>הרשמה</div>
                   {!slotBooking ? (
-                    <p style={{ color: '#ccc', textAlign: 'center', fontSize: '13px' }}>עדיין אין הרשמה למשבצת זו</p>
+                    <div>
+                      <p style={{ color: '#ccc', textAlign: 'center', fontSize: '13px', marginBottom: '10px' }}>עדיין אין הרשמה למשבצת זו</p>
+                      <button onClick={() => setShowAddPerson(v => !v)} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: '13px', fontWeight: '700', color: '#555', padding: 0, marginBottom: showAddPerson ? '8px' : 0,
+                      }}>
+                        <span>{showAddPerson ? '−' : '+'}</span> הוסף הרשמה ידנית
+                      </button>
+                      {showAddPerson && (
+                        <>
+                          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                            <button onClick={() => setNewBookingPaymentMethod('immediate')} style={{
+                              flex: 1, background: newBookingPaymentMethod === 'immediate' ? '#0e7490' : '#fff',
+                              color: newBookingPaymentMethod === 'immediate' ? '#fff' : '#0e7490',
+                              border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
+                            }}>תשלום מיידי</button>
+                            <button onClick={() => setNewBookingPaymentMethod('balance')} style={{
+                              flex: 1, background: newBookingPaymentMethod === 'balance' ? '#0e7490' : '#fff',
+                              color: newBookingPaymentMethod === 'balance' ? '#fff' : '#0e7490',
+                              border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
+                            }}>מיתרת חבילה</button>
+                          </div>
+                          <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} autoFocus />
+                          <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {allPlayers.filter(p => !addPlayerSearch || p.name.includes(addPlayerSearch)).map(p => (
+                              <button key={p.id} onClick={() => addPlayerToPrivateSlot(p.id, newBookingPaymentMethod)} disabled={addingSlotPlayer} style={{
+                                display: 'flex', alignItems: 'center', gap: '8px', background: '#ecfeff', border: '1px solid #a5f3fc',
+                                borderRadius: '10px', padding: '10px 12px', cursor: 'pointer', textAlign: 'right', width: '100%', opacity: addingSlotPlayer ? 0.6 : 1,
+                                color: '#0e7490', fontWeight: '600', fontSize: '14px',
+                              }}>
+                                <span>+</span>
+                                <span>{p.name}</span>
+                              </button>
+                            ))}
+                            {allPlayers.filter(p => !addPlayerSearch || p.name.includes(addPlayerSearch)).length === 0 && (
+                              <p style={{ color: '#bbb', fontSize: '13px', textAlign: 'center', margin: '8px 0' }}>לא נמצאו מתאמנים</p>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   ) : (
                     <div style={{
                       display: 'flex', flexDirection: 'column', gap: '6px',
