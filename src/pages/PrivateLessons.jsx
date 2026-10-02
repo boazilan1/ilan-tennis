@@ -451,6 +451,17 @@ export default function PrivateLessons() {
   })()
   const todayStr = formatDateISO(new Date())
 
+  function weekHasOpenSlots(offset) {
+    return getWeekDays(offset).some(({ date }) => {
+      const ds = formatDateISO(date)
+      if (ds < todayStr || ds in closedDays) return false
+      return slots.some(s => s.slot_date === ds && !isTooLateToBook(s.slot_date, s.time))
+    })
+  }
+  const currentWeekHasSlots = weekHasOpenSlots(weekOffset)
+  const otherWeekOffset = weekOffset === 0 ? 1 : 0
+  const otherWeekHasSlots = otherWeekOffset >= 0 && otherWeekOffset <= MAX_WEEK_OFFSET && weekHasOpenSlots(otherWeekOffset)
+
   return (
     <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3', padding: '40px 20px' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
@@ -478,6 +489,15 @@ export default function PrivateLessons() {
         <p style={{ textAlign: 'center', color: '#aaa', fontSize: '12px', marginTop: '-10px', marginBottom: '18px' }}>
           ניתן להירשם עד שבועיים מראש, ולכל המאוחר {MIN_NOTICE_HOURS} שעות לפני האימון
         </p>
+
+        {!currentWeekHasSlots && otherWeekHasSlots && (
+          <button onClick={() => setWeekOffset(otherWeekOffset)} style={{
+            display: 'block', width: '100%', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '12px',
+            padding: '12px 16px', marginBottom: '16px', color: '#0e7490', fontWeight: '700', fontSize: '13px', cursor: 'pointer',
+          }}>
+            אין משבצות פנויות השבוע — יש פנויות {otherWeekOffset > weekOffset ? 'בשבוע הבא ◀' : 'בשבוע הקודם ▶'}
+          </button>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {weekDays.map(({ key, date }) => {
