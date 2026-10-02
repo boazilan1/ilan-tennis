@@ -521,7 +521,7 @@ export default function PrivateLessons() {
                     </div>
                   </div>
                   {isClosed ? (
-                    <span style={{ color: '#9a3412', fontSize: '13px', fontWeight: '700' }}>🌴 חופשה</span>
+                    <span style={{ color: '#9a3412', fontSize: '13px', fontWeight: '700' }}>🌴 חופשה{closedDays[dateStr] ? ` — ${closedDays[dateStr]}` : ''}</span>
                   ) : daySlots.length === 0 && <span style={{ color: '#ddd', fontSize: '13px' }}>אין אימונים פנויים</span>}
                 </div>
                 {daySlots.length > 0 && (

@@ -1082,6 +1082,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   const [eventForm, setEventForm] = useState(EMPTY_EVENT_FORM)
   const [closedDays, setClosedDays] = useState({})
   const [closingDay, setClosingDay] = useState(false)
+  const [closingDayFor, setClosingDayFor] = useState(null)
+  const [closeDayReason, setCloseDayReason] = useState('')
 
   useEffect(() => { fetchAll() }, [])
 
@@ -1117,12 +1119,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     }
   }
 
-  async function closeDay(date) {
+  async function closeDay(date, reason) {
     const dateStr = formatDate(date)
     const dayKey = DAYS_ORDER[date.getDay()]
-    if (!window.confirm('לסמן את כל היום כחופשה? כל השיעורים והמשבצות הפרטיות בתאריך זה יבוטלו, ולא יהיה ניתן להזמין בו.')) return
+    reason = reason.trim() || 'חופשה'
     setClosingDay(true)
-    const reason = 'חופשה'
     await supabase.from('closed_days').upsert({ date: dateStr, reason })
     const dayActivities = activities.filter(a => !a.parent_activity_id && (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey))
     if (dayActivities.length) {
@@ -1134,6 +1135,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     await supabase.from('private_slots').update({ status: 'cancelled' }).eq('slot_date', dateStr).eq('status', 'open')
     setClosedDays(prev => ({ ...prev, [dateStr]: reason }))
     setPrivateSlots(prev => prev.filter(s => s.slot_date !== dateStr))
+    setClosingDayFor(null); setCloseDayReason('')
     setClosingDay(false)
   }
 
@@ -1756,19 +1758,36 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                           background: 'none', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: '8px',
                           padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', opacity: closingDay ? 0.6 : 1,
                         }}>פתח מחדש</button>
-                      ) : (
-                        <button onClick={() => closeDay(date)} disabled={closingDay} style={{
+                      ) : closingDayFor !== dateStr ? (
+                        <button onClick={() => { setClosingDayFor(dateStr); setCloseDayReason('חופשה') }} style={{
                           background: 'none', border: '1px solid #ddd', color: '#888', borderRadius: '8px',
-                          padding: '5px 10px', cursor: 'pointer', fontSize: '12px', opacity: closingDay ? 0.6 : 1,
+                          padding: '5px 10px', cursor: 'pointer', fontSize: '12px',
                         }}>🚫 סמן כחופשה</button>
-                      )}
+                      ) : null}
                     </div>
                     {isClosed && (
                       <div style={{
                         background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px',
                         padding: '8px 12px', marginBottom: hasItems ? '10px' : 0, fontSize: '13px', color: '#9a3412',
                       }}>
-                        🌴 יום חופש
+                        🌴 יום חופש{closedDays[dateStr] ? ` — ${closedDays[dateStr]}` : ''}
+                      </div>
+                    )}
+                    {closingDayFor === dateStr && (
+                      <div style={{
+                        background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px',
+                        padding: '10px 12px', marginBottom: hasItems ? '10px' : 0, display: 'flex', gap: '8px', alignItems: 'center',
+                      }}>
+                        <input value={closeDayReason} onChange={e => setCloseDayReason(e.target.value)} placeholder="סיבת החופשה"
+                          style={{ ...inputStyle, flex: 1, padding: '7px 10px', fontSize: '13px' }} autoFocus
+                          onKeyDown={e => { if (e.key === 'Enter') closeDay(date, closeDayReason) }} />
+                        <button onClick={() => closeDay(date, closeDayReason)} disabled={closingDay} style={{
+                          background: '#9a3412', color: '#fff', border: 'none', borderRadius: '8px',
+                          padding: '7px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', opacity: closingDay ? 0.6 : 1, whiteSpace: 'nowrap',
+                        }}>{closingDay ? 'מבטל...' : 'אישור'}</button>
+                        <button onClick={() => setClosingDayFor(null)} style={{
+                          background: 'none', border: 'none', color: '#9a3412', cursor: 'pointer', fontSize: '12px',
+                        }}>ביטול</button>
                       </div>
                     )}
                     {hasItems && (
@@ -1885,7 +1904,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     const today = isToday(date)
                     const isClosed = inMonth && (formatDate(date) in closedDays)
                     return (
-                      <div key={di} style={{
+                      <div key={di} title={isClosed ? closedDays[formatDate(date)] : undefined} style={{
                         minHeight: '74px', background: isClosed ? '#fff7ed' : today ? '#f0fdf4' : inMonth ? '#fff' : '#fafafa',
                         border: isClosed ? '1px solid #fed7aa' : today ? '2px solid #1a472a' : '1px solid #eee',
                         borderRadius: '8px', padding: '5px', overflow: 'hidden',
