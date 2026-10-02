@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
+import { formatDateISO } from '../lib/billing'
 
 const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לאימון הפרטי, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
 const DEFAULT_PAYMENT_LINK = 'https://mrng.to/yLXsO2hg8s'
@@ -20,8 +21,6 @@ const DAYS_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'fri
 function formatDateHe(dateStr) {
   return new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })
 }
-
-function formatDateISO(date) { return date.toISOString().split('T')[0] }
 
 const MAX_WEEK_OFFSET = 1 // browsing/booking is limited to the next two weeks
 const MIN_NOTICE_HOURS = 3
@@ -57,6 +56,7 @@ export default function PrivateLessons() {
   const buyPackage = searchParams.get('buy') === 'package'
 
   const [slots, setSlots] = useState([])
+  const [closedDays, setClosedDays] = useState({})
   const [locations, setLocations] = useState([])
   const [slot, setSlot] = useState(null)
   const [players, setPlayers] = useState([])
@@ -112,9 +112,15 @@ export default function PrivateLessons() {
         const { data: slotData } = await supabase.from('private_slots').select('*').eq('id', slotId).single()
         setSlot(slotData || null)
       } else if (!buyPackage) {
-        const todayStr = new Date().toISOString().split('T')[0]
-        const { data: slotsData } = await supabase.from('private_slots').select('*').eq('status', 'open').gte('slot_date', todayStr).order('slot_date').order('time')
-        setSlots(slotsData || [])
+        const todayStr = formatDateISO(new Date())
+        const [slotsRes, closedRes] = await Promise.all([
+          supabase.from('private_slots').select('*').eq('status', 'open').gte('slot_date', todayStr).order('slot_date').order('time'),
+          supabase.from('closed_days').select('date, reason').gte('date', todayStr),
+        ])
+        setSlots(slotsRes.data || [])
+        const closedMap = {}
+        closedRes.data?.forEach(c => { closedMap[c.date] = c.reason || '' })
+        setClosedDays(closedMap)
       }
       setLoading(false)
     }
@@ -477,12 +483,13 @@ export default function PrivateLessons() {
           {weekDays.map(({ key, date }) => {
             const dateStr = formatDateISO(date)
             if (dateStr < todayStr) return null
-            const daySlots = slots.filter(s => s.slot_date === dateStr && !isTooLateToBook(s.slot_date, s.time))
+            const isClosed = dateStr in closedDays
+            const daySlots = isClosed ? [] : slots.filter(s => s.slot_date === dateStr && !isTooLateToBook(s.slot_date, s.time))
             const isToday = dateStr === todayStr
             return (
               <div key={key} style={{
-                background: isToday ? '#f0fdf4' : '#fff',
-                border: isToday ? '2px solid #1a472a' : '1px solid #eee',
+                background: isClosed ? '#fff7ed' : isToday ? '#f0fdf4' : '#fff',
+                border: isClosed ? '1px solid #fed7aa' : isToday ? '2px solid #1a472a' : '1px solid #eee',
                 borderRadius: '14px', padding: '14px 18px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: daySlots.length ? '10px' : 0 }}>
@@ -493,7 +500,9 @@ export default function PrivateLessons() {
                       {isToday && <span style={{ color: '#16a34a', fontWeight: '700' }}> · היום</span>}
                     </div>
                   </div>
-                  {daySlots.length === 0 && <span style={{ color: '#ddd', fontSize: '13px' }}>אין אימונים פנויים</span>}
+                  {isClosed ? (
+                    <span style={{ color: '#9a3412', fontSize: '13px', fontWeight: '700' }}>🌴 חופשה</span>
+                  ) : daySlots.length === 0 && <span style={{ color: '#ddd', fontSize: '13px' }}>אין אימונים פנויים</span>}
                 </div>
                 {daySlots.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>

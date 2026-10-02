@@ -10,7 +10,7 @@ import AdminSettings from './AdminSettings'
 import AdminLocations from './AdminLocations'
 import AdminTrialSignups from './AdminTrialSignups'
 import AdminPackages from './AdminPackages'
-import { computeBillingPlan, getActivityDaysOfWeek } from '../lib/billing'
+import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../lib/billing'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -1078,11 +1078,13 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   const [showEventForm, setShowEventForm] = useState(false)
   const [editingEvent, setEditingEvent] = useState(null)
   const [eventForm, setEventForm] = useState(EMPTY_EVENT_FORM)
+  const [closedDays, setClosedDays] = useState({})
+  const [closingDay, setClosingDay] = useState(false)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
-    const [actRes, evRes, playerRes, trialRes, enrollRes, slotRes, locRes] = await Promise.all([
+    const [actRes, evRes, playerRes, trialRes, enrollRes, slotRes, locRes, closedRes] = await Promise.all([
       supabase.from('activities').select('*'),
       supabase.from('admin_events').select('*').order('created_at'),
       supabase.from('players').select('id, name, birth_year, user_id').order('name'),
@@ -1090,6 +1092,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       supabase.from('enrollments').select('activity_id, status').in('status', ['active', 'pending']),
       supabase.from('private_slots').select('*').neq('status', 'cancelled'),
       supabase.from('locations').select('*').order('sort_order'),
+      supabase.from('closed_days').select('*'),
     ])
     if (actRes.data) setActivities(actRes.data)
     if (evRes.data) setAdminEvents(evRes.data)
@@ -1097,6 +1100,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     if (trialRes.data) setTrialSignups(trialRes.data)
     if (slotRes.data) setPrivateSlots(slotRes.data)
     if (locRes.data) setLocations(locRes.data)
+    if (closedRes.data) {
+      const map = {}
+      closedRes.data.forEach(c => { map[c.date] = c.reason || '' })
+      setClosedDays(map)
+    }
     if (enrollRes.data) {
       const counts = {}
       enrollRes.data.forEach(e => {
@@ -1107,7 +1115,36 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     }
   }
 
-  function formatDate(date) { return date.toISOString().split('T')[0] }
+  async function closeDay(date) {
+    const dateStr = formatDate(date)
+    const dayKey = DAYS_ORDER[date.getDay()]
+    if (!window.confirm('לסמן את כל היום כחופשה? כל השיעורים והמשבצות הפרטיות בתאריך זה יבוטלו, ולא יהיה ניתן להזמין בו.')) return
+    setClosingDay(true)
+    const reason = 'חופשה'
+    await supabase.from('closed_days').upsert({ date: dateStr, reason })
+    const dayActivities = activities.filter(a => !a.parent_activity_id && (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey))
+    if (dayActivities.length) {
+      await supabase.from('activity_sessions').upsert(
+        dayActivities.map(a => ({ activity_id: a.id, session_date: dateStr, status: 'cancelled', notes: reason })),
+        { onConflict: 'activity_id,session_date' }
+      )
+    }
+    await supabase.from('private_slots').update({ status: 'cancelled' }).eq('slot_date', dateStr).eq('status', 'open')
+    setClosedDays(prev => ({ ...prev, [dateStr]: reason }))
+    setPrivateSlots(prev => prev.filter(s => s.slot_date !== dateStr))
+    setClosingDay(false)
+  }
+
+  async function reopenDay(date) {
+    const dateStr = formatDate(date)
+    if (!window.confirm('לפתוח מחדש את היום? זה רק יאפשר יצירת משבצות אימון פרטי חדשות בתאריך זה — שיעורים ומשבצות שכבר בוטלו לא ישוחזרו אוטומטית.')) return
+    setClosingDay(true)
+    await supabase.from('closed_days').delete().eq('date', dateStr)
+    setClosedDays(prev => { const next = { ...prev }; delete next[dateStr]; return next })
+    setClosingDay(false)
+  }
+
+  function formatDate(date) { return formatDateISO(date) }
 
   function startMinutes(timeStr) {
     const m = timeStr?.match(/(\d{1,2}):(\d{2})/)
@@ -1390,6 +1427,10 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   async function submitSlotForm(e) {
     e.preventDefault()
     if (!slotForm.slot_date || !slotForm.time.trim() || !slotForm.price) return
+    if (slotForm.slot_date in closedDays) {
+      alert('התאריך הזה מסומן כחופשה — יש לפתוח אותו מחדש לפני יצירת משבצת אימון פרטי')
+      return
+    }
     setSavingSlot(true)
     const payload = {
       slot_date: slotForm.slot_date,
@@ -1660,6 +1701,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 ].sort((a, b) => a.sortKey - b.sortKey)
                 const today = isToday(date)
                 const hasItems = dayItems.length > 0
+                const dateStr = formatDate(date)
+                const isClosed = dateStr in closedDays
                 return (
                   <div key={key} style={{
                     background: today ? '#f0fdf4' : '#fff',
@@ -1667,16 +1710,37 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     borderRadius: '14px', padding: '14px 18px',
                     boxShadow: today ? '0 4px 14px rgba(26,71,42,0.1)' : '0 2px 6px rgba(0,0,0,0.04)',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: hasItems ? '10px' : 0 }}>
-                      <div style={{ minWidth: '80px' }}>
-                        <div style={{ fontWeight: '700', color: today ? '#1a472a' : '#222', fontSize: '14px' }}>יום {DAYS_HE[key]}</div>
-                        <div style={{ fontSize: '12px', color: '#bbb' }}>
-                          {date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}
-                          {today && <span style={{ color: '#16a34a', fontWeight: '700' }}> · היום</span>}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', marginBottom: (hasItems || isClosed) ? '10px' : 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                        <div style={{ minWidth: '80px' }}>
+                          <div style={{ fontWeight: '700', color: today ? '#1a472a' : '#222', fontSize: '14px' }}>יום {DAYS_HE[key]}</div>
+                          <div style={{ fontSize: '12px', color: '#bbb' }}>
+                            {date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}
+                            {today && <span style={{ color: '#16a34a', fontWeight: '700' }}> · היום</span>}
+                          </div>
                         </div>
+                        {!hasItems && !isClosed && <span style={{ color: '#ddd', fontSize: '13px' }}>אין פעילויות</span>}
                       </div>
-                      {!hasItems && <span style={{ color: '#ddd', fontSize: '13px' }}>אין פעילויות</span>}
+                      {isClosed ? (
+                        <button onClick={() => reopenDay(date)} disabled={closingDay} style={{
+                          background: 'none', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: '8px',
+                          padding: '5px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', opacity: closingDay ? 0.6 : 1,
+                        }}>פתח מחדש</button>
+                      ) : (
+                        <button onClick={() => closeDay(date)} disabled={closingDay} style={{
+                          background: 'none', border: '1px solid #ddd', color: '#888', borderRadius: '8px',
+                          padding: '5px 10px', cursor: 'pointer', fontSize: '12px', opacity: closingDay ? 0.6 : 1,
+                        }}>🚫 סמן כחופשה</button>
+                      )}
                     </div>
+                    {isClosed && (
+                      <div style={{
+                        background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '10px',
+                        padding: '8px 12px', marginBottom: hasItems ? '10px' : 0, fontSize: '13px', color: '#9a3412',
+                      }}>
+                        🌴 יום חופש
+                      </div>
+                    )}
                     {hasItems && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                         {dayItems.map(({ type, item }) => {
@@ -1789,14 +1853,15 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                       ...daySlots.map(slot => ({ type: 'privateSlot', item: slot, id: slot.id, label: `🎾 ${slot.time}`, sortKey: startMinutes(slot.time) })),
                     ].sort((a, b) => a.sortKey - b.sortKey)
                     const today = isToday(date)
+                    const isClosed = inMonth && (formatDate(date) in closedDays)
                     return (
                       <div key={di} style={{
-                        minHeight: '74px', background: today ? '#f0fdf4' : inMonth ? '#fff' : '#fafafa',
-                        border: today ? '2px solid #1a472a' : '1px solid #eee',
+                        minHeight: '74px', background: isClosed ? '#fff7ed' : today ? '#f0fdf4' : inMonth ? '#fff' : '#fafafa',
+                        border: isClosed ? '1px solid #fed7aa' : today ? '2px solid #1a472a' : '1px solid #eee',
                         borderRadius: '8px', padding: '5px', overflow: 'hidden',
                         boxShadow: today ? '0 2px 8px rgba(26,71,42,0.1)' : 'none',
                       }}>
-                        <div style={{ fontSize: '12px', fontWeight: '700', color: today ? '#1a472a' : inMonth ? '#333' : '#ccc', marginBottom: '3px' }}>{date.getDate()}</div>
+                        <div style={{ fontSize: '12px', fontWeight: '700', color: today ? '#1a472a' : inMonth ? '#333' : '#ccc', marginBottom: '3px' }}>{date.getDate()}{isClosed && ' 🌴'}</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           {allItems.slice(0, 3).map(({ type, item, id, label }) => {
                             const isSel = selected?.type === type
