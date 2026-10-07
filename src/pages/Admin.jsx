@@ -1059,6 +1059,8 @@ function CalendarTab() {
   const [selected, setSelected] = useState(null)
   const [enrollments, setEnrollments] = useState([])
   const [attendance, setAttendance] = useState({})
+  const [otherDayEnrollments, setOtherDayEnrollments] = useState([])
+  const [extraDayPastCounts, setExtraDayPastCounts] = useState({})
   const [saving, setSaving] = useState(false)
   const [loadingSession, setLoadingSession] = useState(false)
   const [activitySession, setActivitySession] = useState({ status: 'scheduled', notes: '' })
@@ -1223,16 +1225,43 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     setSelected({ type: 'activity', data: activity, date, combinedIds })
     setShowEventForm(false); setAddPlayerSearch(''); setShowAddPerson(false)
     setLoadingSession(true); setEnrollments([]); setAttendance({})
+    setOtherDayEnrollments([]); setExtraDayPastCounts({})
     setActivitySession({ status: 'scheduled', notes: '' })
     const dateStr = formatDate(date)
-    const [enrollRes, attendRes, sessionRes] = await Promise.all([
+    const dayKey = DAYS_ORDER[date.getDay()]
+    // People registered only for this class's *other* weekday (single-day
+    // variants) — listed separately so admin can track who shows up on a day
+    // they didn't sign up for.
+    const otherDayVariantIds = activities
+      .filter(a => a.parent_activity_id === activity.id && !(a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).includes(dayKey))
+      .map(a => a.id)
+    const [enrollRes, attendRes, sessionRes, otherRes] = await Promise.all([
       supabase.from('enrollments').select('activity_id, player_id, status, player:players(id, name, birth_year)').in('activity_id', combinedIds).in('status', ['active', 'pending']),
       supabase.from('attendance').select('player_id, present').in('activity_id', combinedIds).eq('date', dateStr),
       supabase.from('activity_sessions').select('status, notes').eq('activity_id', activity.id).eq('session_date', dateStr).maybeSingle(),
+      otherDayVariantIds.length
+        ? supabase.from('enrollments').select('activity_id, player_id, status, player:players(id, name, birth_year)').in('activity_id', otherDayVariantIds).in('status', ['active', 'pending'])
+        : Promise.resolve({ data: [] }),
     ])
     if (enrollRes.data) setEnrollments(enrollRes.data)
     if (attendRes.data) { const map = {}; attendRes.data.forEach(r => { map[r.player_id] = r.present }); setAttendance(map) }
     if (sessionRes.data) setActivitySession({ status: sessionRes.data.status || 'scheduled', notes: sessionRes.data.notes || '' })
+
+    const enrolledHere = new Set((enrollRes.data || []).map(e => e.player_id))
+    const seen = new Set()
+    const otherOnly = (otherRes.data || []).filter(e => {
+      if (enrolledHere.has(e.player_id) || seen.has(e.player_id)) return false
+      seen.add(e.player_id)
+      return true
+    })
+    setOtherDayEnrollments(otherOnly)
+    if (otherOnly.length) {
+      const { data: pastRows } = await supabase.from('attendance').select('player_id')
+        .in('activity_id', combinedIds).in('player_id', otherOnly.map(e => e.player_id)).eq('present', true).neq('date', dateStr)
+      const counts = {}
+      pastRows?.forEach(r => { counts[r.player_id] = (counts[r.player_id] || 0) + 1 })
+      setExtraDayPastCounts(counts)
+    }
     setLoadingSession(false)
   }
 
@@ -1517,6 +1546,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   }
 
   const presentCount = enrollments.filter(e => attendance[e.player_id] === true).length
+  const otherDayPresentCount = otherDayEnrollments.filter(e => attendance[e.player_id] === true).length
   const eventPresentCount = Object.values(eventPlayerMap).filter(v => v === true).length
 
   return (
@@ -2011,6 +2041,51 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                     </>
                   )}
                 </div>
+
+                {/* 1b. Registered for this class's other weekday only — tracked separately */}
+                {otherDayEnrollments.length > 0 && (
+                  <div style={{ borderTop: '2px dashed #fde68a', paddingTop: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '800', color: '#b45309' }}>רשומים ליום אחר בלבד</div>
+                      <div style={{ background: '#fef3c7', color: '#b45309', borderRadius: '8px', padding: '3px 10px', fontSize: '14px', fontWeight: '700' }}>{otherDayPresentCount}/{otherDayEnrollments.length}</div>
+                    </div>
+                    <p style={{ fontSize: '12px', color: '#aaa', margin: '0 0 10px' }}>רשומים לפעם בשבוע ביום אחר של החוג. סמנו מי הגיע היום, למעקב.</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {otherDayEnrollments.map(e => {
+                        const came = attendance[e.player_id] === true
+                        const extraTimes = (extraDayPastCounts[e.player_id] || 0) + (came ? 1 : 0)
+                        const regActivity = activities.find(a => a.id === e.activity_id)
+                        const regDays = (regActivity?.days_of_week?.length ? regActivity.days_of_week : [regActivity?.day_of_week]).map(d => DAYS_HE[d]).filter(Boolean).join(', ')
+                        return (
+                          <button key={e.player_id} onClick={() => toggleAttendance(e.player_id)} style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            background: came ? '#fffbeb' : '#fafafa',
+                            border: `2px solid ${came ? '#fde68a' : '#eee'}`,
+                            borderRadius: '12px', padding: '10px 14px', cursor: 'pointer', textAlign: 'right', width: '100%',
+                          }}>
+                            <span style={{ fontSize: '20px', minWidth: '26px' }}>{came ? '✅' : '⬜'}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{e.player?.name}</div>
+                              <div style={{ fontSize: '11px', color: '#999' }}>רשום ליום {regDays}</div>
+                            </div>
+                            {extraTimes > 0 && (
+                              <span style={{
+                                fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fef3c7',
+                                border: '1px solid #fde68a', borderRadius: '20px', padding: '3px 9px', whiteSpace: 'nowrap',
+                              }}>הגיע/ה {extraTimes} {extraTimes === 1 ? 'פעם נוספת' : 'פעמים נוספות'}</span>
+                            )}
+                            {e.status === 'pending' && (
+                              <span style={{
+                                fontSize: '11px', fontWeight: '700', color: '#b45309', background: '#fef3c7',
+                                border: '1px solid #fde68a', borderRadius: '20px', padding: '3px 9px', whiteSpace: 'nowrap',
+                              }}>לא שילם</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* 2. Add player from full list — collapsed behind a toggle */}
                 <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '14px' }}>
