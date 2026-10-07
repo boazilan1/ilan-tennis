@@ -298,6 +298,9 @@ function EnrollmentsTab() {
   // youngest group first; within a group, twice-a-week before once-a-week.
   const groupOrder = {}
   AGE_GROUPS.forEach((g, i) => { groupOrder[g.key] = i })
+  const groupHours = key => [...new Set(
+    Object.values(activities).filter(a => ageGroupKeyForActivity(a) === key && a.time).map(a => a.time.trim())
+  )].join(' / ')
   const efKeyByPlayer = {}
   enrollments.forEach(e => {
     const k = ageGroupKeyForActivity(activities[e.activity_id])
@@ -374,7 +377,10 @@ function EnrollmentsTab() {
               {section.groups.map(g => (
                 <div key={g.key} style={{ marginBottom: '26px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
-                    <span style={{ fontWeight: '800', fontSize: '16px', color: '#111' }}>{g.label}</span>
+                    <span style={{ fontWeight: '800', fontSize: '16px', color: '#111' }}>
+                      {g.label}
+                      {groupHours(g.key) && <span style={{ fontWeight: '600', fontSize: '13px', color: '#777', marginRight: '10px' }}>🕐 {groupHours(g.key)}</span>}
+                    </span>
                     <span style={{
                       fontSize: '12px', fontWeight: '700', color: '#1a472a', background: '#eef5ee',
                       borderRadius: '20px', padding: '3px 12px', whiteSpace: 'nowrap',
@@ -406,11 +412,21 @@ function EnrollmentsTab() {
                           <div style={{ flex: '1.5' }}>
                             <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{e.player?.name || '—'}</div>
                             <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {e.player?.birth_year}</div>
-                            {activity && (
-                              <div style={{ fontSize: '12px', color: '#777', marginTop: '3px' }}>
-                                יום {formatDays(activity)} · {activity.time} · ₪{activity.price}
-                              </div>
-                            )}
+                            {activity && (() => {
+                              const twice = getActivityDaysOfWeek(activity).length >= 2
+                              return (
+                                <>
+                                  <div style={{
+                                    display: 'inline-block', marginTop: '4px', fontSize: '12px', fontWeight: '800',
+                                    color: twice ? '#1a472a' : '#0e7490', background: twice ? '#eef5ee' : '#ecfeff',
+                                    border: `1px solid ${twice ? '#c5ddc5' : '#a5f3fc'}`, borderRadius: '20px', padding: '2px 10px',
+                                  }}>
+                                    📅 {twice ? `פעמיים בשבוע · ${formatDays(activity)}` : `פעם בשבוע · יום ${formatDays(activity)}`}
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: '#777', marginTop: '3px' }}>🕐 {activity.time} · ₪{activity.price}</div>
+                                </>
+                              )
+                            })()}
                             {registeredKey && registeredKey !== g.key && (
                               <div title="הוא רשום לקבוצה שלא תואמת לשנתון שלו" style={{
                                 display: 'inline-block', marginTop: '4px', fontSize: '11px', fontWeight: '700', color: '#b45309',
@@ -1285,6 +1301,21 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     return [activity.id, ...variantIds]
   }
 
+  // Everyone who attends this slot on this specific weekday: the twice-a-week
+  // registrants (registered on the main class) plus the once-a-week ones
+  // registered to this weekday's single-day variant.
+  function getSlotCounts(activity, date) {
+    const ids = getCombinedActivityIdsForDay(activity, date)
+    const count = id => { const c = enrollCounts[id]; return c ? c.active + c.pending : 0 }
+    const runsTwice = (activity.days_of_week?.length || 0) >= 2
+    const main = count(ids[0])
+    const variants = ids.slice(1).reduce((n, id) => n + count(id), 0)
+    const twice = runsTwice ? main : 0
+    const once = runsTwice ? variants : main + variants
+    const pending = ids.reduce((n, id) => n + (enrollCounts[id]?.pending || 0), 0)
+    return { total: twice + once, twice, once, pending }
+  }
+
   async function openActivity(activity, date) {
     const combinedIds = getCombinedActivityIdsForDay(activity, date)
     setSelected({ type: 'activity', data: activity, date, combinedIds })
@@ -1890,7 +1921,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                         {dayItems.map(({ type, item }) => {
                           if (type === 'activity') {
                             const isSel = selected?.type === 'activity' && selected.data.id === item.id && formatDate(selected.date) === formatDate(date)
-                            const cnt = enrollCounts[item.id] || { active: 0, pending: 0 }
+                            const cnt = getSlotCounts(item, date)
                             return (
                               <button key={`a-${item.id}`} onClick={() => openActivity(item, date)} style={{
                                 background: isSel ? '#1a472a' : '#f0f7f0', color: isSel ? '#fff' : '#1a472a',
@@ -1900,9 +1931,14 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               }}>
                                 <div style={{ fontSize: '13px', fontWeight: '700' }}>{item.name}</div>
                                 {item.time && <div style={{ fontSize: '11px', opacity: 0.75, marginTop: '1px' }}>🕐 {item.time}</div>}
-                                {(cnt.active + cnt.pending) > 0 && (
+                                {cnt.total > 0 && (
                                   <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '1px' }}>
-                                    👥 {cnt.active + cnt.pending}{cnt.pending > 0 ? ` (${cnt.pending} לא שילמו)` : ''}
+                                    👥 {cnt.total}{cnt.pending > 0 ? ` (${cnt.pending} לא שילמו)` : ''}
+                                  </div>
+                                )}
+                                {cnt.twice > 0 && cnt.once > 0 && (
+                                  <div style={{ fontSize: '10px', opacity: 0.7, marginTop: '1px' }}>
+                                    {cnt.twice} פעמיים · {cnt.once} פעם
                                   </div>
                                 )}
                               </button>
