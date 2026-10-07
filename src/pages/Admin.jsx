@@ -127,6 +127,49 @@ export default function Admin() {
 }
 
 /* ─── Enrollment Tab ─── */
+/* ─── Age groups (by birth year) for the registrations view ─── */
+// First grade = turns 6 in the calendar year the school year starts (Sept 1).
+function gradeForBirthYear(birthYear, now = new Date()) {
+  const schoolStart = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1
+  return schoolStart - birthYear - 5
+}
+
+const AGE_GROUPS = [
+  { key: 'young',    label: 'צעירים מכיתה א׳' },
+  { key: 'ab',       label: 'כיתות א - ב' },
+  { key: 'cd',       label: 'כיתות ג - ד' },
+  { key: 'ef_girls', label: 'כיתות ה - ו · בנות' },
+  { key: 'ef_boys',  label: 'כיתות ה - ו · בנים' },
+  { key: 'ef',       label: 'כיתות ה - ו · בן/בת לא מוגדר' },
+  { key: 'gh',       label: 'כיתות ז - ט' },
+  { key: 'adults',   label: 'בוגרים' },
+]
+
+// Which age group a class belongs to, from its free-text age_group label.
+function ageGroupKeyForActivity(activity) {
+  const t = (activity?.age_group || '').replace(/\s+/g, '')
+  if (t.includes('א-ב')) return 'ab'
+  if (t.includes('ג-ד')) return 'cd'
+  if (t.includes('ה-ו')) return t.includes('בנות') ? 'ef_girls' : t.includes('בנים') ? 'ef_boys' : 'ef'
+  if (t.includes('ז-ט')) return 'gh'
+  if (t.includes('בוגרים')) return 'adults'
+  return null
+}
+
+// Where a player belongs by age. Grades 5-6 are split into girls/boys classes
+// and the player record has no gender, so they stay in whichever of the two
+// they are actually registered to.
+function ageGroupKeyForPlayer(birthYear, registeredKey) {
+  if (!birthYear) return registeredKey || 'ef'
+  const grade = gradeForBirthYear(birthYear)
+  if (grade <= 0) return 'young'
+  if (grade <= 2) return 'ab'
+  if (grade <= 4) return 'cd'
+  if (grade <= 6) return registeredKey === 'ef_girls' || registeredKey === 'ef_boys' ? registeredKey : 'ef'
+  if (grade <= 9) return 'gh'
+  return 'adults'
+}
+
 function EnrollmentsTab() {
   const [enrollments, setEnrollments] = useState([])
   const [activities, setActivities] = useState({})
@@ -143,7 +186,7 @@ function EnrollmentsTab() {
     setDataLoading(true)
     const [enrollRes, actRes, locRes, subRes] = await Promise.all([
       supabase.from('enrollments').select(`
-        id, status, created_at, activity_id, payment_redirect_at,
+        id, status, created_at, activity_id, payment_redirect_at, player_id,
         player:players(name, birth_year),
         profile:profiles!enrollments_user_id_fkey(full_name, phone, email)
       `).order('created_at', { ascending: false }),
@@ -251,31 +294,42 @@ function EnrollmentsTab() {
   const locationOrder = {}
   locations.forEach((l, i) => { locationOrder[l.id] = i })
 
-  const activityGroupsMap = {}
-  filtered.forEach(e => {
-    const key = e.activity_id || 'none'
-    if (!activityGroupsMap[key]) activityGroupsMap[key] = []
-    activityGroupsMap[key].push(e)
+  // Placed by the player's birth year (not the class they happened to pick),
+  // youngest group first; within a group, twice-a-week before once-a-week.
+  const groupOrder = {}
+  AGE_GROUPS.forEach((g, i) => { groupOrder[g.key] = i })
+  const efKeyByPlayer = {}
+  enrollments.forEach(e => {
+    const k = ageGroupKeyForActivity(activities[e.activity_id])
+    if (k === 'ef_girls' || k === 'ef_boys') efKeyByPlayer[e.player_id] = k
   })
-  const activityGroups = Object.entries(activityGroupsMap).map(([activityId, items]) => {
-    const activity = activities[activityId]
-    const location = activity?.location_id ? locations.find(l => l.id === activity.location_id) : null
-    return { activityId, activity, location, items }
-  })
-
   const locationSectionsMap = {}
-  activityGroups.forEach(g => {
-    const locKey = g.location?.id || 'none'
-    if (!locationSectionsMap[locKey]) locationSectionsMap[locKey] = { location: g.location, groups: [] }
-    locationSectionsMap[locKey].groups.push(g)
+  filtered.forEach(e => {
+    const activity = activities[e.activity_id]
+    const location = activity?.location_id ? locations.find(l => l.id === activity.location_id) : null
+    const locKey = location?.id || 'none'
+    if (!locationSectionsMap[locKey]) locationSectionsMap[locKey] = { location, groups: {} }
+    const groupKey = ageGroupKeyForPlayer(e.player?.birth_year, efKeyByPlayer[e.player_id] || ageGroupKeyForActivity(activity))
+    const groups = locationSectionsMap[locKey].groups
+    if (!groups[groupKey]) groups[groupKey] = { key: groupKey, label: AGE_GROUPS.find(g => g.key === groupKey)?.label || '', twice: [], once: [] }
+    const twice = activity && getActivityDaysOfWeek(activity).length >= 2
+    groups[groupKey][twice ? 'twice' : 'once'].push(e)
   })
-  const locationSections = Object.values(locationSectionsMap).sort((a, b) => {
+  const byYoungestThenName = (a, b) =>
+    (b.player?.birth_year || 0) - (a.player?.birth_year || 0) || (a.player?.name || '').localeCompare(b.player?.name || '', 'he')
+  const locationSections = Object.values(locationSectionsMap).map(section => ({
+    location: section.location,
+    groups: Object.values(section.groups)
+      .sort((a, b) => (groupOrder[a.key] ?? 99) - (groupOrder[b.key] ?? 99))
+      .map(g => {
+        g.twice.sort(byYoungestThenName)
+        g.once.sort(byYoungestThenName)
+        return { ...g, total: g.twice.length + g.once.length }
+      }),
+  })).sort((a, b) => {
     const oa = a.location ? (locationOrder[a.location.id] ?? 999) : 1000
     const ob = b.location ? (locationOrder[b.location.id] ?? 999) : 1000
     return oa - ob
-  })
-  locationSections.forEach(section => {
-    section.groups.sort((a, b) => (a.activity?.name || '').localeCompare(b.activity?.name || '', 'he'))
   })
 
   if (dataLoading) return <LoadingSpinner />
@@ -318,30 +372,28 @@ function EnrollmentsTab() {
                 📍 {section.location?.name || 'ללא מיקום'}
               </div>
               {section.groups.map(g => (
-                <div key={g.activityId} style={{ marginBottom: '18px' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
-                    <div>
-                      <span style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{g.activity?.name || 'ללא חוג'}</span>
-                      {g.activity && (
-                        <span style={{ fontSize: '12px', color: '#aaa', marginRight: '8px' }}>
-                          יום {formatDays(g.activity)} · {g.activity.time} · ₪{g.activity.price}
-                        </span>
-                      )}
-                    </div>
+                <div key={g.key} style={{ marginBottom: '26px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
+                    <span style={{ fontWeight: '800', fontSize: '16px', color: '#111' }}>{g.label}</span>
                     <span style={{
                       fontSize: '12px', fontWeight: '700', color: '#1a472a', background: '#eef5ee',
                       borderRadius: '20px', padding: '3px 12px', whiteSpace: 'nowrap',
-                    }}>{g.items.length} נרשמים</span>
+                    }}>{g.total === 1 ? 'נרשם אחד' : `${g.total} נרשמים`}</span>
                   </div>
+                  {[['twice', 'פעמיים בשבוע', g.twice], ['once', 'פעם בשבוע', g.once]].filter(([, , items]) => items.length > 0).map(([bucketKey, bucketTitle, items]) => (
+                  <div key={bucketKey} style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '700', color: '#999', margin: '0 4px 6px' }}>{bucketTitle} · {items.length}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {g.items.map(e => {
+                    {items.map(e => {
+                      const activity = activities[e.activity_id]
+                      const registeredKey = ageGroupKeyForActivity(activity)
                       const st = STATUS_LABELS[e.status] || STATUS_LABELS.pending
                       const date = new Date(e.created_at).toLocaleDateString('he-IL')
                       const sub = subscriptions[e.id]
                       const subSt = sub ? (SUBSCRIPTION_STATUS_LABELS[sub.status] || null) : null
-                      const days = g.activity ? getActivityDaysOfWeek(g.activity) : []
-                      const plan = (g.activity && days.length && g.activity.price)
-                        ? computeBillingPlan(new Date(e.created_at), days, Number(g.activity.price))
+                      const days = activity ? getActivityDaysOfWeek(activity) : []
+                      const plan = (activity && days.length && activity.price)
+                        ? computeBillingPlan(new Date(e.created_at), days, Number(activity.price))
                         : null
                       const actualCharge = sub ? initialCharges[sub.id] : null
                       return (
@@ -354,6 +406,17 @@ function EnrollmentsTab() {
                           <div style={{ flex: '1.5' }}>
                             <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{e.player?.name || '—'}</div>
                             <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {e.player?.birth_year}</div>
+                            {activity && (
+                              <div style={{ fontSize: '12px', color: '#777', marginTop: '3px' }}>
+                                יום {formatDays(activity)} · {activity.time} · ₪{activity.price}
+                              </div>
+                            )}
+                            {registeredKey && registeredKey !== g.key && (
+                              <div title="הוא רשום לקבוצה שלא תואמת לשנתון שלו" style={{
+                                display: 'inline-block', marginTop: '4px', fontSize: '11px', fontWeight: '700', color: '#b45309',
+                                background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '20px', padding: '2px 9px',
+                              }}>נרשם ל: {activity.age_group}</div>
+                            )}
                           </div>
                           <div style={{ flex: '1.5' }}>
                             <div style={{ fontSize: '14px', color: '#333', fontWeight: '500' }}>{e.profile?.full_name || '—'}</div>
@@ -395,13 +458,13 @@ function EnrollmentsTab() {
                           <StatusPill label={st.label} color={st.color} bg={st.bg} />
                           <div style={{ display: 'flex', gap: '6px' }}>
                             {e.status !== 'active' && (
-                              <ActionBtn label="אשר תשלום" color="#16a34a" onClick={() => updateStatus(e, g.activity, 'active')} disabled={updating === e.id} />
+                              <ActionBtn label="אשר תשלום" color="#16a34a" onClick={() => updateStatus(e, activity, 'active')} disabled={updating === e.id} />
                             )}
                             {e.status !== 'cancelled' && (
-                              <ActionBtn label="ביטול" color="#dc2626" outline onClick={() => updateStatus(e, g.activity, 'cancelled')} disabled={updating === e.id} />
+                              <ActionBtn label="ביטול" color="#dc2626" outline onClick={() => updateStatus(e, activity, 'cancelled')} disabled={updating === e.id} />
                             )}
                             {e.status === 'cancelled' && (
-                              <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e, g.activity, 'pending')} disabled={updating === e.id} />
+                              <ActionBtn label="שחזר" color="#888" outline onClick={() => updateStatus(e, activity, 'pending')} disabled={updating === e.id} />
                             )}
                             {sub?.status === 'failed' && (
                               <ActionBtn label="נסה שוב" color="#16a34a" outline onClick={() => retrySubscriptionCharge(sub.id)} disabled={updating === sub.id} />
@@ -415,6 +478,8 @@ function EnrollmentsTab() {
                       )
                     })}
                   </div>
+                  </div>
+                  ))}
                 </div>
               ))}
             </div>
