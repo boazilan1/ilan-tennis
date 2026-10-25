@@ -39,6 +39,8 @@ export default function Header() {
     { to: '/', label: 'בית' },
     { to: '/גבעת-זאב', label: 'גבעת זאב' },
     { to: '/נוקדים', label: 'נוקדים' },
+    { to: '/register', label: 'הרשמה לחוגים' },
+    { to: '/private-lessons', label: 'שיעורים פרטיים' },
     { to: '/tournaments', label: 'תחרויות' },
     ...dynamicPages.map(p => ({ to: `/page/${p.slug}`, label: p.title })),
     ...(user ? [{ to: '/my-account', label: 'אזור אישי' }] : []),
@@ -62,12 +64,15 @@ export default function Header() {
         </Link>
 
         {/* Desktop nav */}
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '8px', '@media(max-width:768px)': { display: 'none' } }} className="desktop-nav">
+        <nav style={{ display: 'flex', alignItems: 'center', gap: '4px' }} className="desktop-nav">
           {navLinks.map(link => (
             <Link key={link.to} to={link.to} style={{
               color: 'white',
               textDecoration: 'none',
-              padding: '8px 16px',
+              padding: '8px 10px',
+              whiteSpace: link.label.length > 18 ? 'normal' : 'nowrap',
+              maxWidth: '150px',
+              lineHeight: 1.25,
               borderRadius: '6px',
               fontWeight: location.pathname === link.to ? 'bold' : 'normal',
               background: location.pathname === link.to ? 'rgba(255,255,255,0.2)' : 'transparent',
@@ -130,7 +135,7 @@ export default function Header() {
       )}
 
       <style>{`
-        @media (max-width: 768px) {
+        @media (max-width: 1150px) {
           .desktop-nav { display: none !important; }
           .hamburger-btn { display: block !important; }
         }
