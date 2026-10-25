@@ -261,13 +261,29 @@ export default function Register() {
             padding: '14px 18px', marginBottom: '28px', textDecoration: 'none', color: '#0e7490', fontWeight: '700', fontSize: '14px',
           }}>🎾 מחפשים אימון פרטי? לחצו כאן →</Link>
 
+          {groups.length > 1 && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '24px' }}>
+              <span style={{ fontSize: '13px', color: '#888' }}>קפיצה למקום:</span>
+              {groups.map(group => (
+                <button key={group.location?.id || 'other'} onClick={() => document.getElementById(`loc-${group.location?.id || 'other'}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })} style={{
+                  background: '#fff', color: '#1a472a', border: '1.5px solid #1a472a', borderRadius: '30px',
+                  padding: '7px 16px', cursor: 'pointer', fontSize: '14px', fontWeight: '700',
+                }}>📍 {group.location?.name || 'כללי'}</button>
+              ))}
+            </div>
+          )}
+
           {groups.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-              {groups.map((group, gi) => (
-                <div key={group.location?.id || 'other'}>
-                  <h2 style={{ color: '#1a472a', fontSize: '17px', fontWeight: '800', marginBottom: '10px' }}>
-                    {group.location?.name || 'כללי'}
-                  </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '44px' }}>
+              {groups.map(group => (
+                <div key={group.location?.id || 'other'} id={`loc-${group.location?.id || 'other'}`} style={{ scrollMarginTop: '16px' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: '#1a472a', color: '#fff', borderRadius: '12px', padding: '12px 18px', marginBottom: '14px',
+                  }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0 }}>📍 {group.location?.name || 'כללי'}</h2>
+                    <span style={{ fontSize: '12px', opacity: 0.8 }}>{group.items.length === 1 ? 'חוג אחד' : `${group.items.length} חוגים`}</span>
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     {group.items.map(a => (
                       <button key={a.id} onClick={() => navigate(`/register?activity=${a.id}`)} style={{
