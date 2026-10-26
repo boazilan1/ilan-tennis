@@ -1,6 +1,12 @@
 import { getSupabaseAdmin } from './_lib/supabaseAdmin.js'
 import { createPaymentForm, createClient } from './_lib/morning.js'
 
+// Morning rejects phones with dashes/spaces or a +972 prefix (errorCode 2601).
+function normalizePhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '')
+  return digits.startsWith('972') ? `0${digits.slice(3)}` : digits
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -18,7 +24,7 @@ export default async function handler(req, res) {
     // `invite`: the person opened a payment link the admin sent them (/pay/<id>)
     // rather than booking through the site, so they land back on that page.
     const fromInvite = source === 'invite' && kind === 'privateBooking'
-    let amount, description, userId, failurePath, guest = null
+    let amount, description, userId, failurePath, guest = null, bookingPhone = null
 
     if (kind === 'privateBooking') {
       const { data: booking, error } = await supabase
@@ -32,6 +38,7 @@ export default async function handler(req, res) {
       description = `אימון פרטי — ${booking.player?.name || booking.guest_name || ''} — ${booking.slot.slot_date} ${booking.slot.time}`
       userId = booking.user_id
       if (!userId) guest = booking
+      bookingPhone = booking.guest_phone
       failurePath = fromInvite ? `/pay/${booking.id}` : `/private-lessons?slot=${booking.slot.id}`
     } else {
       const { data: pkg, error } = await supabase
@@ -54,7 +61,7 @@ export default async function handler(req, res) {
       .single()
 
     const clientName = guest ? guest.guest_name : (profile?.full_name || 'תלמיד/ה')
-    const clientPhone = guest ? guest.guest_phone : profile?.phone
+    const clientPhone = normalizePhone(guest ? guest.guest_phone : (profile?.phone || bookingPhone))
     let morningClientId = guest ? guest.guest_morning_client_id : (profile?.morning_client_id || null)
     if (!morningClientId) {
       const newClient = await createClient({ name: clientName, email: profile?.email, phone: clientPhone })

@@ -1658,6 +1658,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     const f = inviteForm
     const price = Number(f.price)
     if (!f.name.trim() || !f.slot_date || !f.time.trim() || !price || price <= 0) return
+    if (toIntlPhone(f.phone).length < 11) { alert('יש להזין מספר טלפון תקין'); return }
     if (f.slot_date in closedDays) {
       alert('התאריך הזה מסומן כחופשה — יש לפתוח אותו מחדש לפני יצירת אימון')
       return
@@ -1670,8 +1671,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     if (slotError || !slot) { alert('יצירת האימון נכשלה'); setSavingInvite(false); return }
 
     const who = invitePlayer
-      ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id }
-      : { guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
+      ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id, guest_phone: f.phone.trim() }
+      : { guest_name: f.name.trim(), guest_phone: f.phone.trim() }
     const { data: booking, error: bookError } = await supabase.from('private_slot_bookings')
       .insert({ slot_id: slot.id, payment_method: 'immediate', status: 'pending', price, ...who })
       .select('id').single()
@@ -1927,8 +1928,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <input value={inviteForm.name} onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} required />
               </div>
               <div>
-                <label style={labelStyle}>טלפון (לשליחת הקישור)</label>
-                <input type="tel" value={inviteForm.phone} onChange={e => setInviteForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-1234567" style={inputStyle} />
+                <label style={labelStyle}>טלפון * (לשליחת הקישור ולחשבונית)</label>
+                <input type="tel" value={inviteForm.phone} onChange={e => setInviteForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-1234567" style={inputStyle} required />
               </div>
               <div>
                 <label style={labelStyle}>תאריך *</label>
