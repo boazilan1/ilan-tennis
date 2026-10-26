@@ -1663,12 +1663,21 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       alert('התאריך הזה מסומן כחופשה — יש לפתוח אותו מחדש לפני יצירת אימון')
       return
     }
+    const time = f.time.trim().replace(/^(\d):/, '0$1:')
+    const sameTime = privateSlots.filter(s => s.slot_date === f.slot_date && s.time === time)
+    if (sameTime.some(s => s.status === 'booked') && !window.confirm('כבר יש אימון פרטי תפוס באותו תאריך ושעה. ליצור הזמנה נוספת בכל זאת?')) return
     setSavingInvite(true)
-    const { data: slot, error: slotError } = await supabase.from('private_slots').insert({
-      slot_date: f.slot_date, time: f.time.trim(), duration_minutes: Number(f.duration_minutes) || 45,
-      price, location_id: f.location_id || null, notes: f.notes.trim() || null, status: 'booked',
-    }).select().single()
-    if (slotError || !slot) { alert('יצירת האימון נכשלה'); setSavingInvite(false); return }
+    // An open slot at the same date and time (e.g. a recurring one) is taken
+    // over by the invite — otherwise it would stay bookable on the site.
+    const existingOpen = sameTime.find(s => s.status === 'open')
+    const slotFields = {
+      duration_minutes: Number(f.duration_minutes) || 45, price,
+      location_id: f.location_id || null, notes: f.notes.trim() || null, status: 'booked',
+    }
+    const { data: slot, error: slotError } = existingOpen
+      ? await supabase.from('private_slots').update(slotFields).eq('id', existingOpen.id).eq('status', 'open').select().single()
+      : await supabase.from('private_slots').insert({ slot_date: f.slot_date, time, ...slotFields }).select().single()
+    if (slotError || !slot) { alert('יצירת האימון נכשלה — ייתכן שהמשבצת כבר נתפסה. רענן ונסה שוב.'); setSavingInvite(false); return }
 
     const who = invitePlayer
       ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id, guest_phone: f.phone.trim() }
@@ -1677,18 +1686,25 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       .insert({ slot_id: slot.id, payment_method: 'immediate', status: 'pending', price, ...who })
       .select('id').single()
     if (bookError || !booking) {
-      await supabase.from('private_slots').delete().eq('id', slot.id)
+      if (existingOpen) {
+        await supabase.from('private_slots').update({
+          status: 'open', price: existingOpen.price, duration_minutes: existingOpen.duration_minutes,
+          location_id: existingOpen.location_id, notes: existingOpen.notes,
+        }).eq('id', existingOpen.id)
+      } else {
+        await supabase.from('private_slots').delete().eq('id', slot.id)
+      }
       alert('יצירת ההזמנה נכשלה')
       setSavingInvite(false)
       return
     }
 
-    setPrivateSlots(prev => [...prev, slot])
+    setPrivateSlots(prev => existingOpen ? prev.map(s => s.id === slot.id ? slot : s) : [...prev, slot])
     setInviteResult({
       name: f.name.trim(),
       phone: f.phone.trim(),
       message: inviteMessage({
-        name: f.name.trim(), slotDate: f.slot_date, time: f.time.trim(), price,
+        name: f.name.trim(), slotDate: f.slot_date, time, price,
         location: locations.find(l => l.id === slot.location_id)?.name, link: payLinkFor(booking.id),
       }),
     })
