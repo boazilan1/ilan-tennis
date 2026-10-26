@@ -65,6 +65,7 @@ export default function PrivateLessons() {
   const [newName, setNewName] = useState('')
   const [newBirthYear, setNewBirthYear] = useState('')
   const [balanceByPlayer, setBalanceByPlayer] = useState({})
+  const [customPriceByPlayer, setCustomPriceByPlayer] = useState({})
   const [paymentMethod, setPaymentMethod] = useState('immediate')
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [termsText, setTermsText] = useState(DEFAULT_TERMS)
@@ -106,6 +107,12 @@ export default function PrivateLessons() {
         const balMap = {}
         packagesData?.forEach(p => { balMap[p.player_id] = (balMap[p.player_id] || 0) + p.remaining_sessions })
         setBalanceByPlayer(balMap)
+
+        const { data: pricesData } = await supabase.from('player_private_prices')
+          .select('player_id, price_per_lesson').in('player_id', playersRes.data.map(p => p.id))
+        const priceMap = {}
+        pricesData?.forEach(r => { priceMap[r.player_id] = Number(r.price_per_lesson) })
+        setCustomPriceByPlayer(priceMap)
       }
 
       if (slotId) {
@@ -216,8 +223,8 @@ export default function PrivateLessons() {
       if (!playerId) { setError('יש לבחור שחקן'); setSubmitting(false); return }
 
       const pkg = packageOptions[selectedPackage]
-      const { data: newPackage, error: pkgError } = await supabase.from('lesson_packages')
-        .insert({ user_id: user.id, player_id: playerId, session_count: pkg.sessions, remaining_sessions: pkg.sessions, price: pkg.price, status: 'pending' })
+      const { data: newPackage, error: pkgError } = await supabase
+        .rpc('create_lesson_package', { p_player_id: playerId, p_sessions: pkg.sessions })
         .select().single()
       if (pkgError) throw pkgError
 
@@ -303,6 +310,8 @@ export default function PrivateLessons() {
 
   // ── Buy a package ──
   if (buyPackage) {
+    const customRate = selectedPlayerId ? customPriceByPlayer[selectedPlayerId] : undefined
+    const packagePrice = pkg => customRate != null ? customRate * pkg.sessions : pkg.price
     return (
       <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3' }}>
         <div style={{ background: 'linear-gradient(135deg, #0f2d1a 0%, #1a472a 60%, #2d6a4f 100%)', color: 'white', textAlign: 'center', padding: '52px 24px 44px' }}>
@@ -313,7 +322,10 @@ export default function PrivateLessons() {
           <div style={{ background: '#fff', borderRadius: '18px', padding: '32px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
             <form onSubmit={handleBuyPackage} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div>
-                <label style={labelStyle}>בחר/י חבילה</label>
+                <label style={labelStyle}>
+                  בחר/י חבילה
+                  {customRate != null && <span style={{ marginRight: '8px', fontSize: '12px', fontWeight: '700', color: '#0e7490', background: '#ecfeff', borderRadius: '20px', padding: '2px 10px' }}>מחיר אישי: ₪{customRate} לאימון</span>}
+                </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {packageOptions.map((pkg, i) => (
                     <label key={i} style={{
@@ -326,7 +338,7 @@ export default function PrivateLessons() {
                         <input type="radio" name="pkg" checked={selectedPackage === i} onChange={() => setSelectedPackage(i)} />
                         <span style={{ fontWeight: '700' }}>{pkg.sessions === 1 ? 'אימון אחד' : `${pkg.sessions} אימונים`}</span>
                       </span>
-                      <span style={{ fontWeight: '800', color: '#1a472a' }}>₪{pkg.price}</span>
+                      <span style={{ fontWeight: '800', color: '#1a472a' }}>₪{packagePrice(pkg)}</span>
                     </label>
                   ))}
                 </div>
@@ -337,7 +349,7 @@ export default function PrivateLessons() {
                 background: '#1a472a', color: '#fff', border: 'none', borderRadius: '12px', padding: '14px',
                 fontSize: '16px', fontWeight: '700', cursor: 'pointer',
                 opacity: (submitting || (players.length > 0 && !showNewPlayer && !selectedPlayerId)) ? 0.6 : 1,
-              }}>{submitting ? 'מעביר לתשלום...' : `לתשלום — ₪${packageOptions[selectedPackage]?.price || ''}`}</button>
+              }}>{submitting ? 'מעביר לתשלום...' : `לתשלום — ₪${packageOptions[selectedPackage] ? packagePrice(packageOptions[selectedPackage]) : ''}`}</button>
             </form>
           </div>
         </div>
@@ -376,6 +388,8 @@ export default function PrivateLessons() {
       )
     }
     const hasBalance = selectedPlayerId && balanceByPlayer[selectedPlayerId] > 0
+    const customPrice = selectedPlayerId ? customPriceByPlayer[selectedPlayerId] : undefined
+    const lessonPrice = customPrice ?? slot.price
     return (
       <main style={{ direction: 'rtl', flex: 1, maxWidth: '500px', margin: '40px auto', padding: '0 20px' }}>
         <h1 style={{ color: '#1a472a', marginBottom: '4px', textAlign: 'center' }}>הרשמה לאימון פרטי</h1>
@@ -384,7 +398,7 @@ export default function PrivateLessons() {
             <Icon name="calendar" size={15} color="#0e7490" />{formatDateHe(slot.slot_date)} בשעה {slot.time}
           </p>
           <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Icon name="tag" size={15} color="#0e7490" />₪{slot.price}
+            <Icon name="tag" size={15} color="#0e7490" />₪{lessonPrice}{customPrice != null && ' · מחיר אישי'}
           </p>
         </div>
         <form onSubmit={handleBookSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -401,7 +415,7 @@ export default function PrivateLessons() {
                   borderRadius: '8px', padding: '12px', cursor: 'pointer',
                 }}>
                   <input type="radio" name="paymentMethod" checked={paymentMethod === 'immediate'} onChange={() => setPaymentMethod('immediate')} />
-                  <span style={{ fontWeight: '500' }}>תשלום מיידי — ₪{slot.price}</span>
+                  <span style={{ fontWeight: '500' }}>תשלום מיידי — ₪{lessonPrice}</span>
                 </label>
                 <label style={{
                   display: 'flex', alignItems: 'center', gap: '10px',

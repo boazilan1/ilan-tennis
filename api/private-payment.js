@@ -20,10 +20,11 @@ export default async function handler(req, res) {
     if (kind === 'privateBooking') {
       const { data: booking, error } = await supabase
         .from('private_slot_bookings')
-        .select('id, user_id, player:players(name), slot:private_slots(id, slot_date, time, price)')
+        .select('id, user_id, price, player:players(name), slot:private_slots(id, slot_date, time, price)')
         .eq('id', id).single()
       if (error || !booking) { res.status(404).json({ error: 'Booking not found' }); return }
-      amount = Number(booking.slot.price)
+      // booking.price is fixed when the booking is made (personal rate or the slot price)
+      amount = Number(booking.price ?? booking.slot.price)
       description = `אימון פרטי — ${booking.player?.name || ''} — ${booking.slot.slot_date} ${booking.slot.time}`
       userId = booking.user_id
       failurePath = `/private-lessons?slot=${booking.slot.id}`

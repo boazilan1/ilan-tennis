@@ -537,19 +537,25 @@ function TraineesTab() {
   const [profileOpenId, setProfileOpenId] = useState(null)
   const [attendanceHistory, setAttendanceHistory] = useState([])
   const [loadingAttendance, setLoadingAttendance] = useState(false)
+  const [privatePrices, setPrivatePrices] = useState({})
+  const [priceDraft, setPriceDraft] = useState('')
 
   useEffect(() => { fetchPlayers() }, [])
 
   async function fetchPlayers() {
     setLoading(true)
-    const [playerRes, profileRes, locRes] = await Promise.all([
+    const [playerRes, profileRes, locRes, priceRes] = await Promise.all([
       supabase.from('players').select(`
         id, name, birth_year, notes, user_id,
         enrollments(status, activity:activities(id, name, location_id, days_of_week, day_of_week, time, price))
       `).order('name'),
       supabase.from('profiles').select('id, full_name, phone, email'),
       supabase.from('locations').select('*').order('sort_order'),
+      supabase.from('player_private_prices').select('player_id, price_per_lesson'),
     ])
+    const priceMap = {}
+    priceRes.data?.forEach(r => { priceMap[r.player_id] = Number(r.price_per_lesson) })
+    setPrivatePrices(priceMap)
     if (playerRes.data && profileRes.data) {
       const profileMap = {}
       profileRes.data.forEach(p => { profileMap[p.id] = p })
@@ -593,9 +599,26 @@ function TraineesTab() {
     setEditingId(null)
   }
 
+  async function savePrivatePrice(playerId) {
+    const price = Number(priceDraft)
+    if (!price || price <= 0) { alert('יש להזין מחיר גדול מאפס'); return }
+    const { error } = await supabase.from('player_private_prices')
+      .upsert({ player_id: playerId, price_per_lesson: price, updated_at: new Date().toISOString() })
+    if (error) { alert('שמירת המחיר נכשלה'); return }
+    setPrivatePrices(prev => ({ ...prev, [playerId]: price }))
+  }
+
+  async function clearPrivatePrice(playerId) {
+    const { error } = await supabase.from('player_private_prices').delete().eq('player_id', playerId)
+    if (error) { alert('איפוס המחיר נכשל'); return }
+    setPrivatePrices(prev => { const next = { ...prev }; delete next[playerId]; return next })
+    setPriceDraft('')
+  }
+
   async function toggleProfile(p) {
     if (profileOpenId === p.id) { setProfileOpenId(null); return }
     setProfileOpenId(p.id)
+    setPriceDraft(privatePrices[p.id] != null ? String(privatePrices[p.id]) : '')
     setEditingId(null)
     setLoadingAttendance(true)
     const { data } = await supabase.from('attendance')
@@ -763,6 +786,11 @@ function TraineesTab() {
                                 <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{p.name}</div>
                                 <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>יליד {p.birth_year}</div>
                                 {p.notes && <div style={{ fontSize: '11px', color: '#bbb', marginTop: '3px' }}>📝 {p.notes}</div>}
+                                {privatePrices[p.id] != null && (
+                                  <div style={{ display: 'inline-block', fontSize: '11px', fontWeight: '700', color: '#0e7490', background: '#ecfeff', borderRadius: '20px', padding: '2px 9px', marginTop: '5px' }}>
+                                    💰 פרטי: ₪{privatePrices[p.id]} לאימון
+                                  </div>
+                                )}
                               </div>
                               <div>
                                 <div style={{ fontSize: '14px', color: '#444', fontWeight: '500' }}>{p.profile?.full_name || '—'}</div>
@@ -789,7 +817,20 @@ function TraineesTab() {
                           )}
                           {profileOpenId === p.id && (
                             <div style={{ padding: '4px 20px 20px', borderTop: '1px solid #f0f0f0' }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a472a', margin: '14px 0 10px' }}>היסטוריית נוכחות</div>
+                              <div style={{ fontSize: '13px', fontWeight: '700', color: '#0e7490', margin: '14px 0 6px' }}>מחיר אישי לאימון פרטי</div>
+                              <div style={{ fontSize: '12px', color: '#888', marginBottom: '8px' }}>
+                                מחיר קבוע לאימון עבור {p.name}. חבילה של N אימונים תעלה N כפול המחיר. בלי מחיר אישי — המחיר הרגיל של המשבצת והחבילות.
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: '700', color: '#0e7490' }}>₪</span>
+                                <input type="number" min="1" value={priceDraft} onChange={e => setPriceDraft(e.target.value)} placeholder="לדוגמה 150"
+                                  style={{ ...inputStyle, width: '130px' }} />
+                                <button onClick={() => savePrivatePrice(p.id)} style={primaryBtn}>שמור מחיר</button>
+                                {privatePrices[p.id] != null && (
+                                  <button onClick={() => clearPrivatePrice(p.id)} style={outlineBtn}>חזרה למחיר הרגיל</button>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '13px', fontWeight: '700', color: '#1a472a', margin: '18px 0 10px' }}>היסטוריית נוכחות</div>
                               {loadingAttendance ? (
                                 <p style={{ color: '#bbb', fontSize: '13px', margin: 0 }}>טוען...</p>
                               ) : attendanceHistory.length === 0 ? (
@@ -1581,7 +1622,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     setNewBookingPaymentMethod('immediate')
     setSlotBooking(null); setLoadingSlotBooking(true)
     const { data } = await supabase.from('private_slot_bookings')
-      .select('id, payment_method, status, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .select('id, payment_method, status, price, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
       .eq('slot_id', slot.id).neq('status', 'cancelled').maybeSingle()
     setSlotBooking(data || null)
     setLoadingSlotBooking(false)
@@ -1612,9 +1653,15 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       packageId = pkg.id
       status = 'active'
     }
+    let price = null
+    if (paymentMethod === 'immediate') {
+      const { data: custom } = await supabase.from('player_private_prices')
+        .select('price_per_lesson').eq('player_id', playerId).maybeSingle()
+      price = custom ? Number(custom.price_per_lesson) : Number(selected.data.price)
+    }
     const { data: booking } = await supabase.from('private_slot_bookings')
-      .insert({ slot_id: selected.data.id, player_id: playerId, user_id: player?.user_id, package_id: packageId, payment_method: paymentMethod, status })
-      .select('id, payment_method, status, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .insert({ slot_id: selected.data.id, player_id: playerId, user_id: player?.user_id, package_id: packageId, payment_method: paymentMethod, status, price })
+      .select('id, payment_method, status, price, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
       .single()
     await supabase.from('private_slots').update({ status: 'booked' }).eq('id', selected.data.id)
     setPrivateSlots(prev => prev.map(s => s.id === selected.data.id ? { ...s, status: 'booked' } : s))
@@ -2398,7 +2445,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                           color: slotBooking.status === 'active' ? '#16a34a' : '#b45309',
                           background: slotBooking.status === 'active' ? '#dcfce7' : '#fef3c7',
                         }}>{slotBooking.status === 'active' ? 'שולם ✓' : 'ממתין לתשלום'}</span>
-                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : 'תשלום מיידי'}</span>
+                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : `תשלום מיידי · ₪${slotBooking.price ?? selected.data.price}`}</span>
                       </div>
                       {slotBooking.status === 'pending' && (
                         <button onClick={confirmSlotBookingPayment} disabled={confirmingBooking} style={{
