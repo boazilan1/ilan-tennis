@@ -1151,6 +1151,13 @@ function toIntlPhone(raw) {
   return digits
 }
 
+// How many calendar weeks (Sunday-based) a date is from the current week.
+function weeksFromToday(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const sundayOf = date => new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay())
+  return Math.round((sundayOf(new Date(y, m - 1, d)) - sundayOf(new Date())) / (7 * 24 * 60 * 60 * 1000))
+}
+
 function payLinkFor(bookingId) {
   return `${window.location.origin}/pay/${bookingId}`
 }
@@ -1206,6 +1213,7 @@ function CalendarTab() {
   const [savingSlot, setSavingSlot] = useState(false)
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE_FORM)
+  const [inviteMode, setInviteMode] = useState('send') // 'send' = invite + payment link, 'manual' = record only
   const [invitePlayer, setInvitePlayer] = useState(null)
   const [invitePlayerSearch, setInvitePlayerSearch] = useState('')
   const [savingInvite, setSavingInvite] = useState(false)
@@ -1633,7 +1641,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   }
 
   function openInviteForm() {
-    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInvitePlayerSearch(''); setInviteResult(null)
+    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInvitePlayerSearch(''); setInviteResult(null); setInviteMode('send')
     setShowInviteForm(true); setShowSlotForm(false); setShowEventForm(false); setSelected(null)
   }
 
@@ -1657,10 +1665,14 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   async function submitInvite(e) {
     e.preventDefault()
     const f = inviteForm
-    const price = Number(f.price)
-    if (!f.name.trim() || !f.slot_date || !f.time.trim() || !price || price <= 0) return
-    if (toIntlPhone(f.phone).length < 11) { alert('יש להזין מספר טלפון תקין'); return }
-    if (f.slot_date in closedDays) {
+    // manual: just a record of a lesson (often one that already happened) —
+    // no payment link, no message, so no phone or price needed
+    const manual = inviteMode === 'manual'
+    const price = Number(f.price) || 0
+    if (!f.name.trim() || !f.slot_date || !f.time.trim()) return
+    if (!manual && price <= 0) return
+    if (!manual && toIntlPhone(f.phone).length < 11) { alert('יש להזין מספר טלפון תקין'); return }
+    if (f.slot_date in closedDays && (!manual || f.slot_date >= formatDate(new Date()))) {
       alert('התאריך הזה מסומן כחופשה — יש לפתוח אותו מחדש לפני יצירת אימון')
       return
     }
@@ -1681,10 +1693,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     if (slotError || !slot) { alert('יצירת האימון נכשלה — ייתכן שהמשבצת כבר נתפסה. רענן ונסה שוב.'); setSavingInvite(false); return }
 
     const who = invitePlayer
-      ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id, guest_phone: f.phone.trim() }
-      : { guest_name: f.name.trim(), guest_phone: f.phone.trim() }
+      ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id, guest_phone: f.phone.trim() || null }
+      : { guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
     const { data: booking, error: bookError } = await supabase.from('private_slot_bookings')
-      .insert({ slot_id: slot.id, payment_method: 'immediate', status: 'pending', price, ...who })
+      .insert(manual
+        ? { slot_id: slot.id, payment_method: 'manual', status: 'active', price: price || null, ...who }
+        : { slot_id: slot.id, payment_method: 'immediate', status: 'pending', price, ...who })
       .select('id').single()
     if (bookError || !booking) {
       if (existingOpen) {
@@ -1701,7 +1715,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     }
 
     setPrivateSlots(prev => existingOpen ? prev.map(s => s.id === slot.id ? slot : s) : [...prev, slot])
-    setInviteResult({
+    setViewMode('week'); setWeekOffset(weeksFromToday(f.slot_date))
+    setInviteResult(manual ? { name: f.name.trim(), message: null } : {
       name: f.name.trim(),
       phone: f.phone.trim(),
       message: inviteMessage({
@@ -1777,6 +1792,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       packageId = pkg.id
       status = 'active'
     }
+    if (paymentMethod === 'manual') status = 'active'
     let price = null
     if (paymentMethod === 'immediate') {
       const { data: custom } = await supabase.from('player_private_prices')
@@ -1907,10 +1923,16 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
         {/* Invite result: message ready to send */}
         {inviteResult && (
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '16px', padding: '22px', marginBottom: '20px' }}>
-            <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d', marginBottom: '4px' }}>✓ ההזמנה נוצרה — עכשיו שלח ל{inviteResult.name}</div>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>ההודעה נפתחת באפליקציה בטלפון שלך עם הטקסט והקישור מוכנים — רק ללחוץ שליחה.</div>
-            <pre style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', margin: '0 0 12px', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '13px', color: '#333', direction: 'rtl' }}>{inviteResult.message}</pre>
-            <ShareLinkButtons phone={inviteResult.phone} message={inviteResult.message} />
+            {inviteResult.message ? (
+              <>
+                <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d', marginBottom: '4px' }}>✓ ההזמנה נוצרה — עכשיו שלח ל{inviteResult.name}</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>ההודעה נפתחת באפליקציה בטלפון שלך עם הטקסט והקישור מוכנים — רק ללחוץ שליחה.</div>
+                <pre style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', margin: '0 0 12px', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '13px', color: '#333', direction: 'rtl' }}>{inviteResult.message}</pre>
+                <ShareLinkButtons phone={inviteResult.phone} message={inviteResult.message} />
+              </>
+            ) : (
+              <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d' }}>✓ האימון של {inviteResult.name} נוסף ליומן (רישום ידני — בלי תשלום ובלי שליחה)</div>
+            )}
             <button onClick={() => setInviteResult(null)} style={{ ...outlineBtn, marginTop: '12px' }}>סגור</button>
           </div>
         )}
@@ -1918,8 +1940,24 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
         {/* Invite form */}
         {showInviteForm && (
           <div style={{ background: '#fff', border: '1px solid #bbf7d0', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(22,163,74,0.1)' }}>
-            <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d', marginBottom: '4px' }}>הזמנה לאימון פרטי</div>
-            <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>הזן פרטים ומחיר — נוצר אימון וקישור תשלום שאפשר לשלוח לנייד של המוזמן.</div>
+            <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d', marginBottom: '10px' }}>אימון פרטי לאדם מסוים</div>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+              {[['send', 'הזמנה עם קישור תשלום'], ['manual', 'רישום ידני — בלי תשלום ובלי שליחה']].map(([mode, label]) => (
+                <button key={mode} type="button" onClick={() => {
+                  setInviteMode(mode)
+                  // the 200 default is a payment price, so don't let it be recorded by accident
+                  setInviteForm(f => ({ ...f, price: mode === 'manual' ? (f.price === '200' ? '' : f.price) : (f.price === '' ? '200' : f.price) }))
+                }} style={{
+                  flex: 1, background: inviteMode === mode ? '#16a34a' : '#fff', color: inviteMode === mode ? '#fff' : '#15803d',
+                  border: '1px solid #16a34a', borderRadius: '8px', padding: '7px 8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
+                }}>{label}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>
+              {inviteMode === 'manual'
+                ? 'האימון נרשם ביומן ככזה שהסתיים/שולם מחוץ למערכת — לא נשלח כלום ולא נוצר תשלום. אפשר גם לתאריך שעבר.'
+                : 'הזן פרטים ומחיר — נוצר אימון וקישור תשלום שאפשר לשלוח לנייד של המוזמן.'}
+            </div>
             <form onSubmit={submitInvite} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
                 {invitePlayer ? (
@@ -1945,8 +1983,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <input value={inviteForm.name} onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} required />
               </div>
               <div>
-                <label style={labelStyle}>טלפון * (לשליחת הקישור ולחשבונית)</label>
-                <input type="tel" value={inviteForm.phone} onChange={e => setInviteForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-1234567" style={inputStyle} required />
+                <label style={labelStyle}>{inviteMode === 'manual' ? 'טלפון (לא חובה)' : 'טלפון * (לשליחת הקישור ולחשבונית)'}</label>
+                <input type="tel" value={inviteForm.phone} onChange={e => setInviteForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-1234567" style={inputStyle} required={inviteMode !== 'manual'} />
               </div>
               <div>
                 <label style={labelStyle}>תאריך *</label>
@@ -1957,8 +1995,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <input value={inviteForm.time} onChange={e => setInviteForm(f => ({ ...f, time: e.target.value }))} placeholder="17:00" style={inputStyle} required />
               </div>
               <div>
-                <label style={labelStyle}>מחיר (₪) *</label>
-                <input type="number" min="1" value={inviteForm.price} onChange={e => setInviteForm(f => ({ ...f, price: e.target.value }))} style={inputStyle} required />
+                <label style={labelStyle}>{inviteMode === 'manual' ? 'מחיר (₪, לרישום בלבד)' : 'מחיר (₪) *'}</label>
+                <input type="number" min={inviteMode === 'manual' ? '0' : '1'} value={inviteForm.price} onChange={e => setInviteForm(f => ({ ...f, price: e.target.value }))} style={inputStyle} required={inviteMode !== 'manual'} />
               </div>
               <div>
                 <label style={labelStyle}>משך (דקות)</label>
@@ -1978,7 +2016,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setShowInviteForm(false)} style={outlineBtn}>ביטול</button>
                 <button type="submit" disabled={savingInvite} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '9px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', opacity: savingInvite ? 0.6 : 1 }}>
-                  {savingInvite ? 'יוצר...' : 'צור הזמנה'}
+                  {savingInvite ? 'שומר...' : inviteMode === 'manual' ? 'הוסף ליומן' : 'צור הזמנה'}
                 </button>
               </div>
             </form>
@@ -2249,7 +2287,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               {item.location_id && locations.find(l => l.id === item.location_id) && (
                                 <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>📍 {locations.find(l => l.id === item.location_id).name}</div>
                               )}
-                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>₪{item.price} · {statusLabel}</div>
+                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>{item.price > 0 && `₪${item.price} · `}{statusLabel}</div>
                             </button>
                           )
                         })}
@@ -2595,7 +2633,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
             loadingSlotBooking ? <LoadingSpinner /> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ fontSize: '13px', color: '#555', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div>💰 ₪{selected.data.price} · ⏱ {selected.data.duration_minutes} דקות</div>
+                  <div>{selected.data.price > 0 && `💰 ₪${selected.data.price} · `}⏱ {selected.data.duration_minutes} דקות</div>
                   {selected.data.location_id && locations.find(l => l.id === selected.data.location_id) && (
                     <div>📍 {locations.find(l => l.id === selected.data.location_id).name}</div>
                   )}
@@ -2627,6 +2665,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               color: newBookingPaymentMethod === 'balance' ? '#fff' : '#0e7490',
                               border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
                             }}>מיתרת חבילה</button>
+                            <button onClick={() => setNewBookingPaymentMethod('manual')} style={{
+                              flex: 1, background: newBookingPaymentMethod === 'manual' ? '#0e7490' : '#fff',
+                              color: newBookingPaymentMethod === 'manual' ? '#fff' : '#0e7490',
+                              border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
+                            }}>ללא תשלום</button>
                           </div>
                           <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} autoFocus />
                           <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2659,8 +2702,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                           fontSize: '11px', fontWeight: '700', borderRadius: '20px', padding: '3px 9px',
                           color: slotBooking.status === 'active' ? '#16a34a' : '#b45309',
                           background: slotBooking.status === 'active' ? '#dcfce7' : '#fef3c7',
-                        }}>{slotBooking.status === 'active' ? 'שולם ✓' : 'ממתין לתשלום'}</span>
-                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : `תשלום מיידי · ₪${slotBooking.price ?? selected.data.price}`}</span>
+                        }}>{slotBooking.payment_method === 'manual' ? 'נרשם ידנית ✓' : slotBooking.status === 'active' ? 'שולם ✓' : 'ממתין לתשלום'}</span>
+                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : slotBooking.payment_method === 'manual' ? `ללא תשלום במערכת${slotBooking.price ? ` · ₪${slotBooking.price}` : ''}` : `תשלום מיידי · ₪${slotBooking.price ?? selected.data.price}`}</span>
                       </div>
                       {slotBooking.status === 'pending' && (
                         <button onClick={confirmSlotBookingPayment} disabled={confirmingBooking} style={{
