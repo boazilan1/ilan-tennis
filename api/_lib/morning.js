@@ -54,7 +54,9 @@ async function morningFetch(path, body) {
   })
   const data = await res.json().catch(() => null)
   if (!res.ok) {
-    throw new Error(`Morning API ${path} failed (${res.status}): ${data ? JSON.stringify(data) : await res.text()}`)
+    const err = new Error(`Morning API ${path} failed (${res.status}): ${data ? JSON.stringify(data) : await res.text()}`)
+    err.data = data
+    throw err
   }
   return data
 }
@@ -92,12 +94,20 @@ export function searchToken(externalKey) {
   return morningFetch('/payments/tokens/search', { externalKey })
 }
 
-export function createClient({ name, email, phone }) {
-  return morningFetch('/clients', {
-    name,
-    emails: email ? [email] : [],
-    phone: phone || '',
-  })
+export async function createClient({ name, email, phone }) {
+  try {
+    return await morningFetch('/clients', {
+      name,
+      emails: email ? [email] : [],
+      phone: phone || '',
+    })
+  } catch (err) {
+    // Morning refuses a second client with the same name + phone (errorCode
+    // 1010) and puts the existing client's id in errorMessage — reuse it.
+    const existingId = err.data?.errorCode === 1010 && err.data.errorMessage
+    if (existingId && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(existingId)) return { id: existingId }
+    throw err
+  }
 }
 
 export const MORNING_ENV = ENV
