@@ -18,6 +18,7 @@ import GivatZeev from './pages/GivatZeev'
 import TrialLesson from './pages/TrialLesson'
 import PrivateLessons from './pages/PrivateLessons'
 import MyAccount from './pages/MyAccount'
+import PayInvite from './pages/PayInvite'
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
             <Route path="/trial-lesson" element={<TrialLesson />} />
             <Route path="/private-lessons" element={<PrivateLessons />} />
             <Route path="/my-account" element={<MyAccount />} />
+            <Route path="/pay/:id" element={<PayInvite />} />
             <Route path="/page/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer />

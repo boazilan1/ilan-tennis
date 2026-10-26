@@ -1141,6 +1141,42 @@ const primaryBtn = { background: '#1a472a', color: '#fff', border: 'none', borde
 const outlineBtn = { background: '#fff', color: '#444', border: '1px solid #ddd', borderRadius: '10px', padding: '8px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }
 
 /* ─── Calendar Tab ─── */
+const EMPTY_INVITE_FORM = { name: '', phone: '', slot_date: '', time: '', duration_minutes: '45', price: '200', location_id: '', notes: '' }
+
+function toIntlPhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '')
+  if (digits.startsWith('972')) return digits
+  if (digits.startsWith('0')) return `972${digits.slice(1)}`
+  return digits
+}
+
+function payLinkFor(bookingId) {
+  return `${window.location.origin}/pay/${bookingId}`
+}
+
+function inviteMessage({ name, slotDate, time, location, price, link }) {
+  const when = new Date(slotDate).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })
+  return `היי ${name}, הוזמנת לאימון טניס פרטי עם בועז 🎾\n${when} בשעה ${time}${location ? `\n📍 ${location}` : ''}\nמחיר: ₪${price}\nלתשלום ואישור האימון: ${link}`
+}
+
+// Sends the payment message from the admin's own phone: WhatsApp / SMS open
+// with the text already filled in, so there's no SMS provider to pay for.
+function ShareLinkButtons({ phone, message }) {
+  const [copied, setCopied] = useState(false)
+  const intl = toIntlPhone(phone)
+  const btn = { flex: 1, textAlign: 'center', textDecoration: 'none', border: 'none', borderRadius: '10px', padding: '9px 6px', cursor: 'pointer', fontSize: '13px', fontWeight: '700' }
+  async function copy() {
+    try { await navigator.clipboard.writeText(message); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch { window.prompt('העתק את ההודעה:', message) }
+  }
+  return (
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+      {intl && <a href={`https://wa.me/${intl}?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer" style={{ ...btn, background: '#16a34a', color: '#fff' }}>וואטסאפ</a>}
+      {intl && <a href={`sms:+${intl}?&body=${encodeURIComponent(message)}`} style={{ ...btn, background: '#0e7490', color: '#fff' }}>SMS</a>}
+      <button type="button" onClick={copy} style={{ ...btn, background: '#fff', color: '#444', border: '1px solid #ddd' }}>{copied ? 'הועתק ✓' : 'העתק הודעה'}</button>
+    </div>
+  )
+}
+
 const EMPTY_EVENT_FORM = { title: '', description: '', is_recurring: false, day_of_week: 'sunday', event_date: '', time: '' }
 const EMPTY_SLOT_FORM = { slot_date: '', time: '', duration_minutes: '45', price: '200', location_id: '', payment_link: '', notes: '' }
 const STATUS_EVENT = {
@@ -1167,6 +1203,12 @@ function CalendarTab() {
   const [showSlotForm, setShowSlotForm] = useState(false)
   const [slotForm, setSlotForm] = useState(EMPTY_SLOT_FORM)
   const [savingSlot, setSavingSlot] = useState(false)
+  const [showInviteForm, setShowInviteForm] = useState(false)
+  const [inviteForm, setInviteForm] = useState(EMPTY_INVITE_FORM)
+  const [invitePlayer, setInvitePlayer] = useState(null)
+  const [invitePlayerSearch, setInvitePlayerSearch] = useState('')
+  const [savingInvite, setSavingInvite] = useState(false)
+  const [inviteResult, setInviteResult] = useState(null)
   const [deletingSlot, setDeletingSlot] = useState(false)
   const [slotBooking, setSlotBooking] = useState(null)
   const [loadingSlotBooking, setLoadingSlotBooking] = useState(false)
@@ -1589,6 +1631,70 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     setShowEventForm(false); setEditingEvent(null); setEventForm(EMPTY_EVENT_FORM); setRosterForm({})
   }
 
+  function openInviteForm() {
+    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInvitePlayerSearch(''); setInviteResult(null)
+    setShowInviteForm(true); setShowSlotForm(false); setShowEventForm(false); setSelected(null)
+  }
+
+  // Link the invite to a trainee already in the system: fills in their name,
+  // phone and personal price, and the lesson shows up in their account.
+  async function pickInvitePlayer(p) {
+    setInvitePlayer(p)
+    setInvitePlayerSearch('')
+    setInviteForm(f => ({ ...f, name: p.name }))
+    const [profileRes, priceRes] = await Promise.all([
+      supabase.from('profiles').select('phone').eq('id', p.user_id).maybeSingle(),
+      supabase.from('player_private_prices').select('price_per_lesson').eq('player_id', p.id).maybeSingle(),
+    ])
+    setInviteForm(f => ({
+      ...f,
+      phone: profileRes.data?.phone || f.phone,
+      price: priceRes.data ? String(priceRes.data.price_per_lesson) : f.price,
+    }))
+  }
+
+  async function submitInvite(e) {
+    e.preventDefault()
+    const f = inviteForm
+    const price = Number(f.price)
+    if (!f.name.trim() || !f.slot_date || !f.time.trim() || !price || price <= 0) return
+    if (f.slot_date in closedDays) {
+      alert('התאריך הזה מסומן כחופשה — יש לפתוח אותו מחדש לפני יצירת אימון')
+      return
+    }
+    setSavingInvite(true)
+    const { data: slot, error: slotError } = await supabase.from('private_slots').insert({
+      slot_date: f.slot_date, time: f.time.trim(), duration_minutes: Number(f.duration_minutes) || 45,
+      price, location_id: f.location_id || null, notes: f.notes.trim() || null, status: 'booked',
+    }).select().single()
+    if (slotError || !slot) { alert('יצירת האימון נכשלה'); setSavingInvite(false); return }
+
+    const who = invitePlayer
+      ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id }
+      : { guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
+    const { data: booking, error: bookError } = await supabase.from('private_slot_bookings')
+      .insert({ slot_id: slot.id, payment_method: 'immediate', status: 'pending', price, ...who })
+      .select('id').single()
+    if (bookError || !booking) {
+      await supabase.from('private_slots').delete().eq('id', slot.id)
+      alert('יצירת ההזמנה נכשלה')
+      setSavingInvite(false)
+      return
+    }
+
+    setPrivateSlots(prev => [...prev, slot])
+    setInviteResult({
+      name: f.name.trim(),
+      phone: f.phone.trim(),
+      message: inviteMessage({
+        name: f.name.trim(), slotDate: f.slot_date, time: f.time.trim(), price,
+        location: locations.find(l => l.id === slot.location_id)?.name, link: payLinkFor(booking.id),
+      }),
+    })
+    setShowInviteForm(false); setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null)
+    setSavingInvite(false)
+  }
+
   function openSlotForm(date) {
     setSlotForm({ ...EMPTY_SLOT_FORM, slot_date: date ? formatDate(date) : '' })
     setShowSlotForm(true); setSelected(null); setShowEventForm(false)
@@ -1622,7 +1728,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     setNewBookingPaymentMethod('immediate')
     setSlotBooking(null); setLoadingSlotBooking(true)
     const { data } = await supabase.from('private_slot_bookings')
-      .select('id, payment_method, status, price, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .select('id, payment_method, status, price, guest_name, guest_phone, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
       .eq('slot_id', slot.id).neq('status', 'cancelled').maybeSingle()
     setSlotBooking(data || null)
     setLoadingSlotBooking(false)
@@ -1661,7 +1767,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
     }
     const { data: booking } = await supabase.from('private_slot_bookings')
       .insert({ slot_id: selected.data.id, player_id: playerId, user_id: player?.user_id, package_id: packageId, payment_method: paymentMethod, status, price })
-      .select('id, payment_method, status, price, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .select('id, payment_method, status, price, guest_name, guest_phone, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
       .single()
     await supabase.from('private_slots').update({ status: 'booked' }).eq('id', selected.data.id)
     setPrivateSlots(prev => prev.map(s => s.id === selected.data.id ? { ...s, status: 'booked' } : s))
@@ -1672,7 +1778,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   async function deletePrivateSlot(slot) {
     const recurringNote = slot.template_id ? ' זו משבצת קבועה — אם לא תבטלו את התבנית, היא תיווצר שוב באופן אוטומטי.' : ''
     const warning = slotBooking
-      ? `למשבצת הזו יש הרשמה של ${slotBooking.player?.name}. למחוק בכל זאת? ${slotBooking.payment_method === 'balance' ? 'השיעור יוחזר ליתרה שלו.' : ''}${recurringNote}`
+      ? `למשבצת הזו יש הרשמה של ${slotBooking.player?.name || slotBooking.guest_name}. למחוק בכל זאת? ${slotBooking.payment_method === 'balance' ? 'השיעור יוחזר ליתרה שלו.' : ''}${recurringNote}`
       : `למחוק את המשבצת הזו?${recurringNote}`
     if (!window.confirm(warning)) return
     setDeletingSlot(true)
@@ -1765,6 +1871,12 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               padding: '10px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
               boxShadow: '0 4px 12px rgba(8,145,178,0.3)',
             }}>+ אימון פרטי</button>
+            <button onClick={openInviteForm} style={{
+              background: 'linear-gradient(135deg, #16a34a, #15803d)',
+              color: '#fff', border: 'none', borderRadius: '10px',
+              padding: '10px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: '600',
+              boxShadow: '0 4px 12px rgba(22,163,74,0.3)',
+            }}>✉️ הזמן לאימון</button>
             <button onClick={openAddForm} style={{
               background: 'linear-gradient(135deg, #7c3aed, #6d28d9)',
               color: '#fff', border: 'none', borderRadius: '10px',
@@ -1773,6 +1885,87 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
             }}>+ אירוע אישי</button>
           </div>
         </div>
+
+        {/* Invite result: message ready to send */}
+        {inviteResult && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '16px', padding: '22px', marginBottom: '20px' }}>
+            <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d', marginBottom: '4px' }}>✓ ההזמנה נוצרה — עכשיו שלח ל{inviteResult.name}</div>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>ההודעה נפתחת באפליקציה בטלפון שלך עם הטקסט והקישור מוכנים — רק ללחוץ שליחה.</div>
+            <pre style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '12px', margin: '0 0 12px', whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: '13px', color: '#333', direction: 'rtl' }}>{inviteResult.message}</pre>
+            <ShareLinkButtons phone={inviteResult.phone} message={inviteResult.message} />
+            <button onClick={() => setInviteResult(null)} style={{ ...outlineBtn, marginTop: '12px' }}>סגור</button>
+          </div>
+        )}
+
+        {/* Invite form */}
+        {showInviteForm && (
+          <div style={{ background: '#fff', border: '1px solid #bbf7d0', borderRadius: '16px', padding: '24px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(22,163,74,0.1)' }}>
+            <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d', marginBottom: '4px' }}>הזמנה לאימון פרטי</div>
+            <div style={{ fontSize: '12px', color: '#888', marginBottom: '16px' }}>הזן פרטים ומחיר — נוצר אימון וקישור תשלום שאפשר לשלוח לנייד של המוזמן.</div>
+            <form onSubmit={submitInvite} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ gridColumn: '1 / -1' }}>
+                {invitePlayer ? (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '20px', padding: '4px 12px', fontSize: '13px', color: '#0e7490', fontWeight: '700' }}>
+                    מקושר למתאמן: {invitePlayer.name}
+                    <button type="button" onClick={() => setInvitePlayer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0e7490', fontSize: '14px', padding: 0 }}>✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <input value={invitePlayerSearch} onChange={e => setInvitePlayerSearch(e.target.value)} placeholder="מתאמן קיים? חפש כאן (אפשרות — אפשר גם להזין שם וטלפון ידנית)" style={{ ...inputStyle, fontSize: '13px' }} />
+                    {invitePlayerSearch && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px', maxHeight: '160px', overflowY: 'auto' }}>
+                        {allPlayers.filter(p => p.name.includes(invitePlayerSearch)).slice(0, 8).map(p => (
+                          <button key={p.id} type="button" onClick={() => pickInvitePlayer(p)} style={{ textAlign: 'right', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', color: '#0e7490', fontWeight: '600', fontSize: '13px' }}>{p.name} · יליד {p.birth_year}</button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div>
+                <label style={labelStyle}>שם *</label>
+                <input value={inviteForm.name} onChange={e => setInviteForm(f => ({ ...f, name: e.target.value }))} style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>טלפון (לשליחת הקישור)</label>
+                <input type="tel" value={inviteForm.phone} onChange={e => setInviteForm(f => ({ ...f, phone: e.target.value }))} placeholder="050-1234567" style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>תאריך *</label>
+                <input type="date" value={inviteForm.slot_date} onChange={e => setInviteForm(f => ({ ...f, slot_date: e.target.value }))} style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>שעה *</label>
+                <input value={inviteForm.time} onChange={e => setInviteForm(f => ({ ...f, time: e.target.value }))} placeholder="17:00" style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>מחיר (₪) *</label>
+                <input type="number" min="1" value={inviteForm.price} onChange={e => setInviteForm(f => ({ ...f, price: e.target.value }))} style={inputStyle} required />
+              </div>
+              <div>
+                <label style={labelStyle}>משך (דקות)</label>
+                <input type="number" value={inviteForm.duration_minutes} onChange={e => setInviteForm(f => ({ ...f, duration_minutes: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <label style={labelStyle}>מיקום</label>
+                <select value={inviteForm.location_id} onChange={e => setInviteForm(f => ({ ...f, location_id: e.target.value }))} style={inputStyle}>
+                  <option value="">— ללא —</option>
+                  {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>הערות</label>
+                <input value={inviteForm.notes} onChange={e => setInviteForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} />
+              </div>
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setShowInviteForm(false)} style={outlineBtn}>ביטול</button>
+                <button type="submit" disabled={savingInvite} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '9px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', opacity: savingInvite ? 0.6 : 1 }}>
+                  {savingInvite ? 'יוצר...' : 'צור הזמנה'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Private slot form */}
         {showSlotForm && (
@@ -2437,8 +2630,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                       display: 'flex', flexDirection: 'column', gap: '6px',
                       background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '12px', padding: '12px 14px',
                     }}>
-                      <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{slotBooking.player?.name}</div>
-                      <div style={{ fontSize: '12px', color: '#888' }}>{slotBooking.profile?.full_name || ''} {slotBooking.profile?.phone || ''}</div>
+                      <div style={{ fontWeight: '700', fontSize: '15px', color: '#111' }}>{slotBooking.player?.name || slotBooking.guest_name}</div>
+                      <div style={{ fontSize: '12px', color: '#888' }}>{slotBooking.profile?.full_name || (slotBooking.guest_name ? 'הוזמן ידנית' : '')} {slotBooking.profile?.phone || slotBooking.guest_phone || ''}</div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
                         <span style={{
                           fontSize: '11px', fontWeight: '700', borderRadius: '20px', padding: '3px 9px',
@@ -2452,6 +2645,19 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                           marginTop: '8px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px',
                           padding: '9px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', opacity: confirmingBooking ? 0.6 : 1,
                         }}>{confirmingBooking ? 'מאשר...' : 'אשר תשלום'}</button>
+                      )}
+                      {slotBooking.status === 'pending' && slotBooking.payment_method === 'immediate' && (
+                        <div style={{ marginTop: '8px' }}>
+                          <div style={{ fontSize: '11px', color: '#888', marginBottom: '5px' }}>שלח קישור תשלום:</div>
+                          <ShareLinkButtons
+                            phone={slotBooking.profile?.phone || slotBooking.guest_phone}
+                            message={inviteMessage({
+                              name: slotBooking.player?.name || slotBooking.guest_name, slotDate: selected.data.slot_date, time: selected.data.time,
+                              price: slotBooking.price ?? selected.data.price, location: locations.find(l => l.id === selected.data.location_id)?.name,
+                              link: payLinkFor(slotBooking.id),
+                            })}
+                          />
+                        </div>
                       )}
                     </div>
                   )}

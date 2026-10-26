@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const { kind, id } = req.body || {}
+  const { kind, id, source } = req.body || {}
   if (!id || !['privateBooking', 'package'].includes(kind)) {
     res.status(400).json({ error: 'Missing or invalid kind/id' })
     return
@@ -15,19 +15,24 @@ export default async function handler(req, res) {
 
   try {
     const supabase = getSupabaseAdmin()
-    let amount, description, userId, failurePath
+    // `invite`: the person opened a payment link the admin sent them (/pay/<id>)
+    // rather than booking through the site, so they land back on that page.
+    const fromInvite = source === 'invite' && kind === 'privateBooking'
+    let amount, description, userId, failurePath, guest = null
 
     if (kind === 'privateBooking') {
       const { data: booking, error } = await supabase
         .from('private_slot_bookings')
-        .select('id, user_id, price, player:players(name), slot:private_slots(id, slot_date, time, price)')
+        .select('id, user_id, status, price, guest_name, guest_phone, guest_morning_client_id, player:players(name), slot:private_slots(id, slot_date, time, price)')
         .eq('id', id).single()
       if (error || !booking) { res.status(404).json({ error: 'Booking not found' }); return }
+      if (booking.status !== 'pending') { res.status(409).json({ error: 'Booking is not awaiting payment' }); return }
       // booking.price is fixed when the booking is made (personal rate or the slot price)
       amount = Number(booking.price ?? booking.slot.price)
-      description = `אימון פרטי — ${booking.player?.name || ''} — ${booking.slot.slot_date} ${booking.slot.time}`
+      description = `אימון פרטי — ${booking.player?.name || booking.guest_name || ''} — ${booking.slot.slot_date} ${booking.slot.time}`
       userId = booking.user_id
-      failurePath = `/private-lessons?slot=${booking.slot.id}`
+      if (!userId) guest = booking
+      failurePath = fromInvite ? `/pay/${booking.id}` : `/private-lessons?slot=${booking.slot.id}`
     } else {
       const { data: pkg, error } = await supabase
         .from('lesson_packages')
@@ -40,21 +45,22 @@ export default async function handler(req, res) {
       failurePath = '/private-lessons?buy=package'
     }
 
-    const { data: profile } = await supabase
+    // A guest (invited by the admin, no account) has no profile — their
+    // name/phone live on the booking and their Morning client id is cached there.
+    const { data: profile } = guest ? { data: null } : await supabase
       .from('profiles')
       .select('full_name, phone, email, morning_client_id')
       .eq('id', userId)
       .single()
 
-    let morningClientId = profile?.morning_client_id || null
+    const clientName = guest ? guest.guest_name : (profile?.full_name || 'תלמיד/ה')
+    const clientPhone = guest ? guest.guest_phone : profile?.phone
+    let morningClientId = guest ? guest.guest_morning_client_id : (profile?.morning_client_id || null)
     if (!morningClientId) {
-      const newClient = await createClient({
-        name: profile?.full_name || 'תלמיד/ה',
-        email: profile?.email,
-        phone: profile?.phone,
-      })
+      const newClient = await createClient({ name: clientName, email: profile?.email, phone: clientPhone })
       morningClientId = newClient.id
-      await supabase.from('profiles').update({ morning_client_id: morningClientId }).eq('id', userId)
+      if (guest) await supabase.from('private_slot_bookings').update({ guest_morning_client_id: morningClientId }).eq('id', id)
+      else await supabase.from('profiles').update({ morning_client_id: morningClientId }).eq('id', userId)
     }
 
     const origin = req.headers.origin || `https://${req.headers.host}`
@@ -64,12 +70,12 @@ export default async function handler(req, res) {
       description,
       client: {
         id: morningClientId,
-        name: profile?.full_name || 'תלמיד/ה',
+        name: clientName,
         emails: profile?.email ? [profile.email] : [],
-        phone: profile?.phone || '',
+        phone: clientPhone || '',
       },
       custom: id,
-      successUrl: `${origin}/register/thank-you`,
+      successUrl: fromInvite ? `${origin}/pay/${id}?paid=1` : `${origin}/register/thank-you`,
       failureUrl: `${origin}${failurePath}`,
     })
 
