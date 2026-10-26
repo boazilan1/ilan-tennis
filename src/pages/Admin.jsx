@@ -11,6 +11,7 @@ import AdminLocations from './AdminLocations'
 import AdminTrialSignups from './AdminTrialSignups'
 import AdminPackages from './AdminPackages'
 import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../lib/billing'
+import { formatTimeRange } from '../lib/timeRange'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -1154,9 +1155,9 @@ function payLinkFor(bookingId) {
   return `${window.location.origin}/pay/${bookingId}`
 }
 
-function inviteMessage({ name, slotDate, time, location, price, link }) {
+function inviteMessage({ name, slotDate, time, duration, location, price, link }) {
   const when = new Date(slotDate).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })
-  return `היי ${name}, הוזמנת לאימון טניס פרטי עם בועז 🎾\n${when} בשעה ${time}${location ? `\n📍 ${location}` : ''}\nמחיר: ₪${price}\nלתשלום ואישור האימון: ${link}`
+  return `היי ${name}, הוזמנת לאימון טניס פרטי עם בועז 🎾\n${when} בשעה ${formatTimeRange(time, duration)}${location ? `\n📍 ${location}` : ''}\nמחיר: ₪${price}\nלתשלום ואישור האימון: ${link}`
 }
 
 // Sends the payment message from the admin's own phone: WhatsApp / SMS open
@@ -1704,7 +1705,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       name: f.name.trim(),
       phone: f.phone.trim(),
       message: inviteMessage({
-        name: f.name.trim(), slotDate: f.slot_date, time, price,
+        name: f.name.trim(), slotDate: f.slot_date, time, duration: slot.duration_minutes, price,
         location: locations.find(l => l.id === slot.location_id)?.name, link: payLinkFor(booking.id),
       }),
     })
@@ -2243,7 +2244,11 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                               borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
                               boxShadow: isSel ? '0 4px 12px rgba(8,145,178,0.3)' : 'none',
                             }}>
-                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 אימון פרטי · {item.time}{item.template_id ? ' 🔁' : ''}</div>
+                              <div style={{ fontSize: '13px', fontWeight: '700' }}>🎾 אימון פרטי{item.template_id ? ' 🔁' : ''}</div>
+                              <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>🕐 {formatTimeRange(item.time, item.duration_minutes)}</div>
+                              {item.location_id && locations.find(l => l.id === item.location_id) && (
+                                <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>📍 {locations.find(l => l.id === item.location_id).name}</div>
+                              )}
                               <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>₪{item.price} · {statusLabel}</div>
                             </button>
                           )
@@ -2341,7 +2346,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '18px' }}>
             <div>
               <div style={{ fontWeight: '800', color: selected.type === 'event' ? '#7c3aed' : selected.type === 'trial' ? '#b45309' : selected.type === 'privateSlot' ? '#0e7490' : '#1a472a', fontSize: '17px' }}>
-                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.type === 'privateSlot' ? `🎾 אימון פרטי · ${selected.data.time}${selected.data.template_id ? ' 🔁' : ''}` : selected.data.name}
+                {selected.type === 'event' ? selected.data.title : selected.type === 'trial' ? `🎾 שיעור ניסיון · ${selected.data.time_slot}` : selected.type === 'privateSlot' ? `🎾 אימון פרטי · ${formatTimeRange(selected.data.time, selected.data.duration_minutes)}${selected.data.template_id ? ' 🔁' : ''}` : selected.data.name}
               </div>
               {selected.type === 'trial' && (
                 <div style={{ fontSize: '12px', color: '#b45309', marginTop: '2px' }}>{selected.data.age_group}</div>
@@ -2670,7 +2675,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                             phone={slotBooking.profile?.phone || slotBooking.guest_phone}
                             message={inviteMessage({
                               name: slotBooking.player?.name || slotBooking.guest_name, slotDate: selected.data.slot_date, time: selected.data.time,
-                              price: slotBooking.price ?? selected.data.price, location: locations.find(l => l.id === selected.data.location_id)?.name,
+                              duration: selected.data.duration_minutes, price: slotBooking.price ?? selected.data.price, location: locations.find(l => l.id === selected.data.location_id)?.name,
                               link: payLinkFor(slotBooking.id),
                             })}
                           />

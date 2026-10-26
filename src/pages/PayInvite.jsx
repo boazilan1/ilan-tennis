@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Icon from '../components/Icon'
+import { formatTimeRange } from '../lib/timeRange'
 
 function formatDateHe(dateStr) {
   return new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })
@@ -65,7 +66,7 @@ export default function PayInvite() {
     )
   }
 
-  const when = `${formatDateHe(booking.slot_date)} בשעה ${booking.time}`
+  const when = `${formatDateHe(booking.slot_date)} בשעה ${formatTimeRange(booking.time, booking.duration_minutes)}`
 
   if (booking.status === 'active' || justPaid) {
     return (

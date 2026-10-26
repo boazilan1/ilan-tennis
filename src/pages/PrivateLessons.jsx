@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { formatDateISO } from '../lib/billing'
+import { formatTimeRange } from '../lib/timeRange'
 
 const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לאימון הפרטי, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
 const DEFAULT_PAYMENT_LINK = 'https://mrng.to/yLXsO2hg8s'
@@ -373,7 +374,7 @@ export default function PrivateLessons() {
           <div style={{ background: '#fff', borderRadius: '12px', padding: '40px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
             <div style={{ marginBottom: '16px' }}><Icon name="check" size={44} color="#1a472a" /></div>
             <h2 style={{ color: '#1a472a', marginBottom: '8px' }}>ההרשמה אושרה!</h2>
-            <p style={{ color: '#555', marginBottom: '24px' }}>נוכה שיעור אחד מהיתרה שלך. מחכים לראותכם ב-{formatDateHe(slot.slot_date)} בשעה {slot.time}</p>
+            <p style={{ color: '#555', marginBottom: '24px' }}>נוכה שיעור אחד מהיתרה שלך. מחכים לראותכם ב-{formatDateHe(slot.slot_date)} בשעה {formatTimeRange(slot.time, slot.duration_minutes)}{slot.location_id && locations.find(l => l.id === slot.location_id) ? ` · ${locations.find(l => l.id === slot.location_id).name}` : ''}</p>
             <Link to="/" style={{ display: 'inline-block', background: '#1a472a', color: '#fff', textDecoration: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '15px' }}>חזרה לעמוד הבית</Link>
           </div>
         </main>
@@ -395,8 +396,11 @@ export default function PrivateLessons() {
         <h1 style={{ color: '#1a472a', marginBottom: '4px', textAlign: 'center' }}>הרשמה לאימון פרטי</h1>
         <div style={{ background: '#ecfeff', borderRadius: '10px', padding: '16px', marginBottom: '28px' }}>
           <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Icon name="calendar" size={15} color="#0e7490" />{formatDateHe(slot.slot_date)} בשעה {slot.time}
+            <Icon name="calendar" size={15} color="#0e7490" />{formatDateHe(slot.slot_date)} בשעה {formatTimeRange(slot.time, slot.duration_minutes)}
           </p>
+          {slot.location_id && locations.find(l => l.id === slot.location_id) && (
+            <p style={{ margin: '2px 0', fontSize: '14px', color: '#333' }}>📍 {locations.find(l => l.id === slot.location_id).name}</p>
+          )}
           <p style={{ margin: '2px 0', fontSize: '14px', color: '#333', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Icon name="tag" size={15} color="#0e7490" />₪{lessonPrice}{customPrice != null && ' · מחיר אישי'}
           </p>
@@ -545,7 +549,7 @@ export default function PrivateLessons() {
                         background: '#ecfeff', color: '#0e7490', border: '1px solid #a5f3fc',
                         borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', textAlign: 'right',
                       }}>
-                        <div style={{ fontSize: '13px', fontWeight: '700' }}>🕐 {s.time} · ₪{s.price}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '700' }}>🕐 {formatTimeRange(s.time, s.duration_minutes)} · ₪{s.price}</div>
                         {s.location_id && locations.find(l => l.id === s.location_id) && (
                           <div style={{ fontSize: '11px', opacity: 0.8, marginTop: '1px' }}>📍 {locations.find(l => l.id === s.location_id).name}</div>
                         )}

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
+import { formatTimeRange } from '../lib/timeRange'
 
 const DAYS_HE = { sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי', wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת' }
 
@@ -44,7 +45,7 @@ export default function MyAccount() {
       const [enrollRes, bookRes, attRes, pkgRes] = await Promise.all([
         supabase.from('enrollments').select('id, status, activity:activities(id, name, time, days_of_week, day_of_week)')
           .eq('player_id', selectedPlayerId).in('status', ['active', 'pending']),
-        supabase.from('private_slot_bookings').select('id, status, payment_method, slot:private_slots(slot_date, time, price)')
+        supabase.from('private_slot_bookings').select('id, status, payment_method, slot:private_slots(slot_date, time, duration_minutes, price, location:locations(name))')
           .eq('player_id', selectedPlayerId).in('status', ['active', 'pending']),
         supabase.from('attendance').select('date, present, activity:activities(name)')
           .eq('player_id', selectedPlayerId).order('date', { ascending: false }),
@@ -150,7 +151,7 @@ export default function MyAccount() {
                       <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
                         <div>
                           <div style={{ fontWeight: '700', fontSize: '14px', color: '#222' }}>🎾 אימון פרטי</div>
-                          <div style={{ fontSize: '12px', color: '#888' }}>{b.slot && formatDateHe(b.slot.slot_date)} {b.slot?.time && `· ${b.slot.time}`}</div>
+                          <div style={{ fontSize: '12px', color: '#888' }}>{b.slot && formatDateHe(b.slot.slot_date)} {b.slot?.time && `· ${formatTimeRange(b.slot.time, b.slot.duration_minutes)}`}{b.slot?.location?.name && ` · 📍 ${b.slot.location.name}`}</div>
                         </div>
                         <span style={{ fontSize: '11px', fontWeight: '700', borderRadius: '20px', padding: '3px 10px', color: st.color, background: st.bg, whiteSpace: 'nowrap' }}>{st.label}</span>
                       </div>
