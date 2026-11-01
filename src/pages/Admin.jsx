@@ -1142,6 +1142,9 @@ const primaryBtn = { background: '#1a472a', color: '#fff', border: 'none', borde
 const outlineBtn = { background: '#fff', color: '#444', border: '1px solid #ddd', borderRadius: '10px', padding: '8px 16px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }
 
 /* ─── Calendar Tab ─── */
+// Programs that can cover a private lesson so the trainee doesn't pay for it himself.
+const PRIVATE_PROGRAMS = ['מהשטח למגרש', 'שיקומי']
+
 const EMPTY_INVITE_FORM = { name: '', phone: '', slot_date: '', time: '', duration_minutes: '45', price: '200', location_id: '', notes: '' }
 
 function toIntlPhone(raw) {
@@ -1213,6 +1216,7 @@ function CalendarTab() {
   const [savingSlot, setSavingSlot] = useState(false)
   const [showInviteForm, setShowInviteForm] = useState(false)
   const [inviteForm, setInviteForm] = useState(EMPTY_INVITE_FORM)
+  const [inviteProgram, setInviteProgram] = useState('')
   const [inviteMode, setInviteMode] = useState('send') // 'send' = invite + payment link, 'manual' = record only
   const [invitePlayer, setInvitePlayer] = useState(null)
   const [invitePlayerSearch, setInvitePlayerSearch] = useState('')
@@ -1223,6 +1227,7 @@ function CalendarTab() {
   const [loadingSlotBooking, setLoadingSlotBooking] = useState(false)
   const [confirmingBooking, setConfirmingBooking] = useState(false)
   const [newBookingPaymentMethod, setNewBookingPaymentMethod] = useState('immediate')
+  const [newBookingProgram, setNewBookingProgram] = useState('')
   const [addingSlotPlayer, setAddingSlotPlayer] = useState(false)
   const [savingTrialAttendance, setSavingTrialAttendance] = useState(false)
   const [showAddPerson, setShowAddPerson] = useState(false)
@@ -1641,7 +1646,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   }
 
   function openInviteForm() {
-    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInvitePlayerSearch(''); setInviteResult(null); setInviteMode('send')
+    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInvitePlayerSearch(''); setInviteResult(null); setInviteMode('send'); setInviteProgram('')
     setShowInviteForm(true); setShowSlotForm(false); setShowEventForm(false); setSelected(null)
   }
 
@@ -1697,7 +1702,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       : { guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
     const { data: booking, error: bookError } = await supabase.from('private_slot_bookings')
       .insert(manual
-        ? { slot_id: slot.id, payment_method: 'manual', status: 'active', price: price || null, ...who }
+        ? { slot_id: slot.id, payment_method: inviteProgram ? 'program' : 'manual', program: inviteProgram || null, status: 'active', price: price || null, ...who }
         : { slot_id: slot.id, payment_method: 'immediate', status: 'pending', price, ...who })
       .select('id').single()
     if (bookError || !booking) {
@@ -1716,7 +1721,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
     setPrivateSlots(prev => existingOpen ? prev.map(s => s.id === slot.id ? slot : s) : [...prev, slot])
     setViewMode('week'); setWeekOffset(weeksFromToday(f.slot_date))
-    setInviteResult(manual ? { name: f.name.trim(), message: null } : {
+    setInviteResult(manual ? { name: f.name.trim(), message: null, program: inviteProgram } : {
       name: f.name.trim(),
       phone: f.phone.trim(),
       message: inviteMessage({
@@ -1724,7 +1729,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
         location: locations.find(l => l.id === slot.location_id)?.name, link: payLinkFor(booking.id),
       }),
     })
-    setShowInviteForm(false); setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null)
+    setShowInviteForm(false); setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInviteProgram('')
     setSavingInvite(false)
   }
 
@@ -1758,10 +1763,10 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   async function openPrivateSlot(slot, date) {
     setSelected({ type: 'privateSlot', data: slot, date })
     setShowEventForm(false); setShowSlotForm(false); setAddPlayerSearch(''); setShowAddPerson(false)
-    setNewBookingPaymentMethod('immediate')
+    setNewBookingPaymentMethod('immediate'); setNewBookingProgram('')
     setSlotBooking(null); setLoadingSlotBooking(true)
     const { data } = await supabase.from('private_slot_bookings')
-      .select('id, payment_method, status, price, guest_name, guest_phone, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .select('id, payment_method, status, price, program, guest_name, guest_phone, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
       .eq('slot_id', slot.id).neq('status', 'cancelled').maybeSingle()
     setSlotBooking(data || null)
     setLoadingSlotBooking(false)
@@ -1792,7 +1797,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       packageId = pkg.id
       status = 'active'
     }
-    if (paymentMethod === 'manual') status = 'active'
+    if (paymentMethod === 'manual' || paymentMethod === 'program') status = 'active'
     let price = null
     if (paymentMethod === 'immediate') {
       const { data: custom } = await supabase.from('player_private_prices')
@@ -1800,8 +1805,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       price = custom ? Number(custom.price_per_lesson) : Number(selected.data.price)
     }
     const { data: booking } = await supabase.from('private_slot_bookings')
-      .insert({ slot_id: selected.data.id, player_id: playerId, user_id: player?.user_id, package_id: packageId, payment_method: paymentMethod, status, price })
-      .select('id, payment_method, status, price, guest_name, guest_phone, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
+      .insert({ slot_id: selected.data.id, player_id: playerId, user_id: player?.user_id, package_id: packageId, payment_method: paymentMethod, status, price, program: paymentMethod === 'program' ? newBookingProgram : null })
+      .select('id, payment_method, status, price, program, guest_name, guest_phone, player:players(id, name, birth_year), profile:profiles!private_slot_bookings_user_id_fkey(full_name, phone)')
       .single()
     await supabase.from('private_slots').update({ status: 'booked' }).eq('id', selected.data.id)
     setPrivateSlots(prev => prev.map(s => s.id === selected.data.id ? { ...s, status: 'booked' } : s))
@@ -1931,7 +1936,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <ShareLinkButtons phone={inviteResult.phone} message={inviteResult.message} />
               </>
             ) : (
-              <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d' }}>✓ האימון של {inviteResult.name} נוסף ליומן (רישום ידני — בלי תשלום ובלי שליחה)</div>
+              <div style={{ fontWeight: '700', fontSize: '16px', color: '#15803d' }}>✓ האימון של {inviteResult.name} נוסף ליומן ({inviteResult.program ? `תוכנית ${inviteResult.program}` : 'רישום ידני'} — בלי תשלום ובלי שליחה)</div>
             )}
             <button onClick={() => setInviteResult(null)} style={{ ...outlineBtn, marginTop: '12px' }}>סגור</button>
           </div>
@@ -1945,6 +1950,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
               {[['send', 'הזמנה עם קישור תשלום'], ['manual', 'רישום ידני — בלי תשלום ובלי שליחה']].map(([mode, label]) => (
                 <button key={mode} type="button" onClick={() => {
                   setInviteMode(mode)
+                  if (mode === 'send') setInviteProgram('')
                   // the 200 default is a payment price, so don't let it be recorded by accident
                   setInviteForm(f => ({ ...f, price: mode === 'manual' ? (f.price === '200' ? '' : f.price) : (f.price === '' ? '200' : f.price) }))
                 }} style={{
@@ -2013,6 +2019,15 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                 <label style={labelStyle}>הערות</label>
                 <input value={inviteForm.notes} onChange={e => setInviteForm(f => ({ ...f, notes: e.target.value }))} style={inputStyle} />
               </div>
+              {inviteMode === 'manual' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>מי משלם?</label>
+                  <select value={inviteProgram} onChange={e => setInviteProgram(e.target.value)} style={inputStyle}>
+                    <option value="">ללא תשלום במערכת (שולם בנפרד / כבר התקיים)</option>
+                    {PRIVATE_PROGRAMS.map(name => <option key={name} value={name}>לא הוא משלם — תוכנית {name}</option>)}
+                  </select>
+                </div>
+              )}
               <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setShowInviteForm(false)} style={outlineBtn}>ביטול</button>
                 <button type="submit" disabled={savingInvite} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: '10px', padding: '9px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', opacity: savingInvite ? 0.6 : 1 }}>
@@ -2655,21 +2670,31 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                       {showAddPerson && (
                         <>
                           <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                            <button onClick={() => setNewBookingPaymentMethod('immediate')} style={{
+                            <button onClick={() => { setNewBookingPaymentMethod('immediate'); setNewBookingProgram('') }} style={{
                               flex: 1, background: newBookingPaymentMethod === 'immediate' ? '#0e7490' : '#fff',
                               color: newBookingPaymentMethod === 'immediate' ? '#fff' : '#0e7490',
                               border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
                             }}>תשלום מיידי</button>
-                            <button onClick={() => setNewBookingPaymentMethod('balance')} style={{
+                            <button onClick={() => { setNewBookingPaymentMethod('balance'); setNewBookingProgram('') }} style={{
                               flex: 1, background: newBookingPaymentMethod === 'balance' ? '#0e7490' : '#fff',
                               color: newBookingPaymentMethod === 'balance' ? '#fff' : '#0e7490',
                               border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
                             }}>מיתרת חבילה</button>
-                            <button onClick={() => setNewBookingPaymentMethod('manual')} style={{
+                            <button onClick={() => { setNewBookingPaymentMethod('manual'); setNewBookingProgram('') }} style={{
                               flex: 1, background: newBookingPaymentMethod === 'manual' ? '#0e7490' : '#fff',
                               color: newBookingPaymentMethod === 'manual' ? '#fff' : '#0e7490',
                               border: '1px solid #0e7490', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
                             }}>ללא תשלום</button>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>לא הוא משלם — תוכנית:</div>
+                          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                            {PRIVATE_PROGRAMS.map(name => (
+                              <button key={name} onClick={() => { setNewBookingPaymentMethod('program'); setNewBookingProgram(name) }} style={{
+                                flex: 1, background: newBookingProgram === name ? '#7c3aed' : '#fff',
+                                color: newBookingProgram === name ? '#fff' : '#7c3aed',
+                                border: '1px solid #7c3aed', borderRadius: '8px', padding: '7px', cursor: 'pointer', fontSize: '12px', fontWeight: '700',
+                              }}>{name}</button>
+                            ))}
                           </div>
                           <input value={addPlayerSearch} onChange={e => setAddPlayerSearch(e.target.value)} placeholder="חיפוש שם..." style={{ ...inputStyle, fontSize: '14px', marginBottom: '8px' }} autoFocus />
                           <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2702,8 +2727,8 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                           fontSize: '11px', fontWeight: '700', borderRadius: '20px', padding: '3px 9px',
                           color: slotBooking.status === 'active' ? '#16a34a' : '#b45309',
                           background: slotBooking.status === 'active' ? '#dcfce7' : '#fef3c7',
-                        }}>{slotBooking.payment_method === 'manual' ? 'נרשם ידנית ✓' : slotBooking.status === 'active' ? 'שולם ✓' : 'ממתין לתשלום'}</span>
-                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : slotBooking.payment_method === 'manual' ? `ללא תשלום במערכת${slotBooking.price ? ` · ₪${slotBooking.price}` : ''}` : `תשלום מיידי · ₪${slotBooking.price ?? selected.data.price}`}</span>
+                        }}>{slotBooking.payment_method === 'program' ? `תוכנית: ${slotBooking.program} ✓` : slotBooking.payment_method === 'manual' ? 'נרשם ידנית ✓' : slotBooking.status === 'active' ? 'שולם ✓' : 'ממתין לתשלום'}</span>
+                        <span style={{ fontSize: '11px', color: '#888' }}>{slotBooking.payment_method === 'balance' ? 'מיתרת חבילה' : slotBooking.payment_method === 'program' ? 'לא משלם בעצמו' : slotBooking.payment_method === 'manual' ? `ללא תשלום במערכת${slotBooking.price ? ` · ₪${slotBooking.price}` : ''}` : `תשלום מיידי · ₪${slotBooking.price ?? selected.data.price}`}</span>
                       </div>
                       {slotBooking.status === 'pending' && (
                         <button onClick={confirmSlotBookingPayment} disabled={confirmingBooking} style={{
