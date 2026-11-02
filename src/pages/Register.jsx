@@ -70,7 +70,7 @@ export default function Register() {
     if (!settingsLoaded || registrationPaused) return
     if (authLoading) return
     if (!user) {
-      navigate('/login')
+      navigate(`/login?redirect=${encodeURIComponent('/register' + (activityId ? `?activity=${activityId}` : ''))}`)
       return
     }
     if (!activityId) {
