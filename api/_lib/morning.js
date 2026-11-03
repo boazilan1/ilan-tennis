@@ -61,8 +61,10 @@ async function morningFetch(path, body) {
   return data
 }
 
-export function createPaymentForm({ amount, description, client, custom, successUrl, failureUrl, notifyUrl }) {
-  return morningFetch('/payments/form', {
+const WAIT = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+export async function createPaymentForm({ amount, description, client, custom, successUrl, failureUrl, notifyUrl }) {
+  const body = {
     description,
     type: PAID_DOCUMENT_TYPE,
     amount,
@@ -76,7 +78,18 @@ export function createPaymentForm({ amount, description, client, custom, success
     successUrl,
     failureUrl,
     notifyUrl,
-  })
+  }
+  // A client created a moment ago can't be used in a payment form yet: Morning
+  // answers errorCode 2601 ("name and phone missing") for about a second, so a
+  // new customer's very first attempt used to fail. Wait and try again.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await morningFetch('/payments/form', body)
+    } catch (err) {
+      if (err.data?.errorCode !== 2601 || attempt >= 4) throw err
+      await WAIT(1000 * attempt)
+    }
+  }
 }
 
 export function chargeToken(tokenId, { amount, description }) {
