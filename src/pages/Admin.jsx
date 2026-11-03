@@ -442,7 +442,7 @@ function EnrollmentsTab() {
                           </div>
                           <div style={{ fontSize: '12px', color: '#bbb', minWidth: '70px', textAlign: 'center' }}>{date}</div>
                           {plan && !actualCharge && (
-                            <span title={`${plan.remainingLessons} אימונים שנותרו ב${plan.currentMonthLabel}${plan.extraMonthCharged ? ` + חודש ${plan.extraMonthLabel} מלא (מועד ה-20 הקרוב כבר עבר)` : ''} · הוראת קבע: ₪${plan.monthlyPrice}/חודש, חיוב ראשון ב-${plan.standingOrderFirstDateLabel} עבור ${plan.standingOrderCoversLabel}`} style={{
+                            <span title={`${plan.remainingLessons} מתוך ${plan.lessonsInMonth} אימונים שנותרו ב${plan.currentMonthLabel}${plan.extraMonthCharged ? ` + חודש ${plan.extraMonthLabel} מלא (מועד ה-20 הקרוב כבר עבר)` : ''} · הוראת קבע: ₪${plan.monthlyPrice}/חודש, חיוב ראשון ב-${plan.standingOrderFirstDateLabel} עבור ${plan.standingOrderCoversLabel}`} style={{
                               fontSize: '11px', fontWeight: '700', color: '#1a472a', background: '#eef5ee',
                               border: '1px solid #c5ddc5', borderRadius: '20px', padding: '4px 10px', whiteSpace: 'nowrap',
                             }}>💳 צפי ₪{plan.immediateCharge}</span>

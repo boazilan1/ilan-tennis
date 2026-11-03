@@ -44,13 +44,19 @@ function monthLabel(year, monthIndex) {
 export function computeBillingPlan(registrationDate, daysOfWeek, monthlyPrice) {
   const lessonsPerWeek = daysOfWeek.length || 1
   const lessonsPerMonthStandard = lessonsPerWeek * 4
-  const pricePerLesson = monthlyPrice / lessonsPerMonthStandard
 
   const year = registrationDate.getFullYear()
   const month = registrationDate.getMonth()
   const monthEnd = new Date(year, month + 1, 0)
   const remainingLessons = countOccurrences(daysOfWeek, registrationDate, monthEnd)
-  const proratedAmount = Math.round(pricePerLesson * remainingLessons)
+
+  // The monthly price covers every lesson of the month — 4 in most months but
+  // 5 in a month with a fifth Sunday/Monday/etc. — so a late joiner pays the
+  // share of that month's lessons still ahead of them, and never more than
+  // the monthly price itself.
+  const lessonsInMonth = countOccurrences(daysOfWeek, new Date(year, month, 1), monthEnd)
+  const pricePerLesson = monthlyPrice / (lessonsInMonth || lessonsPerMonthStandard)
+  const proratedAmount = Math.min(monthlyPrice, Math.round(pricePerLesson * remainingLessons))
 
   const day = registrationDate.getDate()
   const registeredAfterCutoff = day >= BILLING_DAY
@@ -86,6 +92,7 @@ export function computeBillingPlan(registrationDate, daysOfWeek, monthlyPrice) {
     lessonsPerMonthStandard,
     pricePerLesson,
     remainingLessons,
+    lessonsInMonth,
     proratedAmount,
     registeredAfterCutoff,
     currentMonthLabel,

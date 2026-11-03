@@ -2,6 +2,18 @@ import { getSupabaseAdmin } from './_lib/supabaseAdmin.js'
 import { createPaymentForm, createClient } from './_lib/morning.js'
 import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../src/lib/billing.js'
 
+// Morning rejects phones with dashes/spaces or a +972 prefix (errorCode 2601).
+function normalizePhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '')
+  return digits.startsWith('972') ? `0${digits.slice(3)}` : digits
+}
+
+// The server runs in UTC; the registration date that drives the proration
+// (and the 20th-of-the-month cutoff) must be the date in Israel.
+function israelDate(isoTimestamp) {
+  return new Date(new Date(isoTimestamp).toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }))
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
@@ -48,7 +60,7 @@ export default async function handler(req, res) {
     const standingOrderLink = (isSibling && activity.sibling_payment_link) || activity.payment_link || null
 
     const days = getActivityDaysOfWeek(activity)
-    const plan = computeBillingPlan(new Date(enrollment.created_at), days, effectivePrice)
+    const plan = computeBillingPlan(israelDate(enrollment.created_at), days, effectivePrice)
 
     const origin = req.headers.origin || `https://${req.headers.host}`
 
@@ -61,7 +73,7 @@ export default async function handler(req, res) {
       const newClient = await createClient({
         name: profile?.full_name || 'תלמיד/ה',
         email: profile?.email,
-        phone: profile?.phone,
+        phone: normalizePhone(profile?.phone),
       })
       morningClientId = newClient.id
       await supabase.from('profiles').update({ morning_client_id: morningClientId }).eq('id', enrollment.user_id)
@@ -74,7 +86,7 @@ export default async function handler(req, res) {
         id: morningClientId,
         name: profile?.full_name || 'תלמיד/ה',
         emails: profile?.email ? [profile.email] : [],
-        phone: profile?.phone || '',
+        phone: normalizePhone(profile?.phone),
       },
       custom: enrollmentId,
       successUrl: `${origin}/register/thank-you`,

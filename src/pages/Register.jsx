@@ -138,6 +138,10 @@ export default function Register() {
 
         if (playerError) throw playerError
         playerId = newPlayer.id
+        // keep the new player selected so a retry (e.g. after a payment error) doesn't create a duplicate
+        setPlayers(prev => [...prev, newPlayer])
+        setSelectedPlayerId(newPlayer.id)
+        setShowNewPlayer(false)
       }
 
       if (!playerId) {
@@ -190,8 +194,9 @@ export default function Register() {
         console.error('notify email failed', notifyErr)
       }
 
-      // מעבר לתשלום
-      let paymentUrl = effectiveActivity.payment_link || 'https://mrng.to/yLXsO2hg8s'
+      // מעבר לתשלום — רק לדף תשלום שנוצר בדיוק לסכום ההרשמה. אם יצירתו נכשלה לא מפנים
+      // לקישור קבוע (סכום ותיאור אחרים), כדי שלא ישלמו סכום שגוי ואז ישלמו שוב.
+      let paymentUrl = null
       let standingOrderLink = (isSibling && effectiveActivity.sibling_payment_link) || effectiveActivity.payment_link || null
       try {
         const payRes = await fetch('/api/register-payment', {
@@ -204,10 +209,16 @@ export default function Register() {
           if (payData.url) paymentUrl = payData.url
           if (payData.standingOrderLink) standingOrderLink = payData.standingOrderLink
         } else {
-          console.error('register-payment failed, falling back to static payment link')
+          console.error('register-payment failed', payRes.status)
         }
       } catch (payErr) {
-        console.error('register-payment request failed, falling back to static payment link', payErr)
+        console.error('register-payment request failed', payErr)
+      }
+
+      if (!paymentUrl) {
+        setError('לא הצלחנו לפתוח את דף התשלום. ההרשמה נשמרה ולא חויבת — נסו שוב בעוד רגע, ואם זה חוזר פנו אלינו בטלפון.')
+        setSubmitting(false)
+        return
       }
 
       sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
@@ -470,7 +481,7 @@ export default function Register() {
                     תשלום חד־פעמי עכשיו — ₪{plan.immediateCharge}
                   </div>
                   <div style={{ fontSize: '12.5px', color: '#666', marginTop: '2px', lineHeight: 1.6 }}>
-                    מכסה רק את <strong>{plan.currentMonthLabel}</strong> — {plan.remainingLessons} האימונים שנותרו החודש
+                    מכסה רק את <strong>{plan.currentMonthLabel}</strong> — {plan.remainingLessons} מתוך {plan.lessonsInMonth} האימונים של החודש שנותרו
                     {plan.extraMonthCharged && (
                       <> + <strong>{plan.extraMonthLabel}</strong> מלא מראש (מועד החיוב הקבוע הקרוב ב-20 כבר עבר החודש, אז נגבה גם את החודש הבא כדי שלא תיווצר "חור" בתשלום)</>
                     )}
