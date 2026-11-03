@@ -198,6 +198,7 @@ export default function Register() {
       // לקישור קבוע (סכום ותיאור אחרים), כדי שלא ישלמו סכום שגוי ואז ישלמו שוב.
       let paymentUrl = null
       let standingOrderLink = (isSibling && effectiveActivity.sibling_payment_link) || effectiveActivity.payment_link || null
+      let standingOrderPlan = null
       try {
         const payRes = await fetch('/api/register-payment', {
           method: 'POST',
@@ -208,6 +209,7 @@ export default function Register() {
           const payData = await payRes.json()
           if (payData.url) paymentUrl = payData.url
           if (payData.standingOrderLink) standingOrderLink = payData.standingOrderLink
+          if (payData.standingOrderPlan) standingOrderPlan = payData.standingOrderPlan
         } else {
           console.error('register-payment failed', payRes.status)
         }
@@ -222,7 +224,7 @@ export default function Register() {
       }
 
       sessionStorage.setItem('ilan_pending_enrollment', JSON.stringify({
-        id: newEnrollment.id, activityName: effectiveActivity.name, standingOrderLink,
+        id: newEnrollment.id, activityName: effectiveActivity.name, standingOrderLink, standingOrderPlan,
       }))
 
       window.location.href = paymentUrl
@@ -486,6 +488,12 @@ export default function Register() {
                       <> + <strong>{plan.extraMonthLabel}</strong> מלא מראש (מועד החיוב הקבוע הקרוב ב-20 כבר עבר החודש, אז נגבה גם את החודש הבא כדי שלא תיווצר "חור" בתשלום)</>
                     )}
                   </div>
+                  {(plan.remainingLessons < plan.lessonsInMonth || plan.extraMonthCharged) && (
+                    <div style={{ fontSize: '12px', color: '#1a472a', background: '#f3f8f3', borderRadius: '8px', padding: '6px 10px', marginTop: '6px', display: 'inline-block', direction: 'rtl' }}>
+                      חישוב: ₪{plan.monthlyPrice} ÷ {plan.lessonsInMonth} אימונים × {plan.remainingLessons} = ₪{plan.proratedAmount}
+                      {plan.extraMonthCharged && <> + ₪{plan.monthlyPrice} ({plan.extraMonthLabel} מלא) = ₪{plan.immediateCharge}</>}
+                    </div>
+                  )}
                 </div>
               </div>
 

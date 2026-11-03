@@ -12,26 +12,26 @@ function readPendingEnrollment() {
   const raw = sessionStorage.getItem('ilan_pending_enrollment')
   if (raw) {
     try {
-      const { id, activityName, standingOrderLink } = JSON.parse(raw)
-      return { id: id || null, kind: 'enrollment', activityName: activityName || '', standingOrderLink: standingOrderLink || '' }
+      const { id, activityName, standingOrderLink, standingOrderPlan } = JSON.parse(raw)
+      return { id: id || null, kind: 'enrollment', activityName: activityName || '', standingOrderLink: standingOrderLink || '', standingOrderPlan: standingOrderPlan || null }
     } catch {
-      return { id: null, kind: 'enrollment', activityName: '', standingOrderLink: '' }
+      return { id: null, kind: 'enrollment', activityName: '', standingOrderLink: '', standingOrderPlan: null }
     }
   }
   const rawPrivate = sessionStorage.getItem('ilan_pending_private_booking')
   if (rawPrivate) {
     try {
       const { id, kind } = JSON.parse(rawPrivate)
-      return { id: id || null, kind: kind || 'privateBooking', activityName: '', standingOrderLink: '' }
+      return { id: id || null, kind: kind || 'privateBooking', activityName: '', standingOrderLink: '', standingOrderPlan: null }
     } catch {
-      return { id: null, kind: 'privateBooking', activityName: '', standingOrderLink: '' }
+      return { id: null, kind: 'privateBooking', activityName: '', standingOrderLink: '', standingOrderPlan: null }
     }
   }
-  return { id: null, kind: 'enrollment', activityName: '', standingOrderLink: '' }
+  return { id: null, kind: 'enrollment', activityName: '', standingOrderLink: '', standingOrderPlan: null }
 }
 
 export default function RegisterThankYou() {
-  const [{ id, kind, activityName, standingOrderLink }] = useState(readPendingEnrollment)
+  const [{ id, kind, activityName, standingOrderLink, standingOrderPlan }] = useState(readPendingEnrollment)
   const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
@@ -66,6 +66,13 @@ export default function RegisterThankYou() {
               בלי לאשר את הצעד הזה, החיוב החודשי הבא <strong>לא יתבצע אוטומטית</strong> וההרשמה תישאר לא פעילה. זו לחיצה אחת בלבד, ולא תצטרכו לחזור לזה כל חודש.
             </p>
           </div>
+
+          {standingOrderPlan && (
+            <div style={{ background: '#f3f8f3', border: '1px solid #cfe3cf', borderRadius: '10px', padding: '12px 14px', textAlign: 'right', marginBottom: '18px', fontSize: '13.5px', color: '#234a2e', lineHeight: 1.7 }}>
+              📅 ההוראה תתחיל ב-<strong>{standingOrderPlan.firstDateLabel}</strong> ותכסה את <strong>{standingOrderPlan.coversLabel}</strong>.
+              ומשם והלאה ייגבו <strong>₪{standingOrderPlan.monthlyPrice}</strong> אוטומטית ב-20 לכל חודש.
+            </div>
+          )}
 
           <a href={standingOrderLink} style={{
             display: 'inline-block', background: '#1a472a', color: '#fff', textDecoration: 'none',

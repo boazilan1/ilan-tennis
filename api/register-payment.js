@@ -105,7 +105,17 @@ export default async function handler(req, res) {
 
     if (subError) throw subError
 
-    res.status(200).json({ url: form.url, standingOrderLink, isSibling })
+    res.status(200).json({
+      url: form.url,
+      standingOrderLink,
+      isSibling,
+      // what the standing order will do, so the step-2 page can say it plainly
+      standingOrderPlan: {
+        monthlyPrice: plan.monthlyPrice,
+        firstDateLabel: plan.standingOrderFirstDateLabel,
+        coversLabel: plan.standingOrderCoversLabel,
+      },
+    })
   } catch (err) {
     console.error('register-payment error', err)
     res.status(502).json({ error: 'Payment setup failed' })
