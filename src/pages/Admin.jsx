@@ -1143,7 +1143,7 @@ const outlineBtn = { background: '#fff', color: '#444', border: '1px solid #ddd'
 
 /* ─── Calendar Tab ─── */
 // Programs that can cover a private lesson so the trainee doesn't pay for it himself.
-const PRIVATE_PROGRAMS = ['מהשטח למגרש', 'שיקומי']
+const PRIVATE_PROGRAMS = ['מהשטח למגרש', 'שיקומי', 'Move']
 
 const EMPTY_INVITE_FORM = { name: '', phone: '', slot_date: '', time: '', duration_minutes: '45', price: '200', location_id: '', notes: '' }
 
@@ -2687,7 +2687,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
                             }}>ללא תשלום</button>
                           </div>
                           <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>לא הוא משלם — תוכנית:</div>
-                          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                             {PRIVATE_PROGRAMS.map(name => (
                               <button key={name} onClick={() => { setNewBookingPaymentMethod('program'); setNewBookingProgram(name) }} style={{
                                 flex: 1, background: newBookingProgram === name ? '#7c3aed' : '#fff',
