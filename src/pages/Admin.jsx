@@ -47,6 +47,8 @@ export default function Admin() {
   const { user, isAdmin, loading } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('calendar')
+  // A person picked in the trainees tab to invite to a private lesson; the calendar tab opens its invite form with them.
+  const [inviteSeed, setInviteSeed] = useState(null)
 
   useEffect(() => {
     if (!loading && (!user || !isAdmin)) navigate('/')
@@ -111,10 +113,10 @@ export default function Admin() {
       {/* ── Content ── */}
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 28px' }}>
         {tab === 'enrollments' && <EnrollmentsTab />}
-        {tab === 'trainees'    && <TraineesTab />}
+        {tab === 'trainees'    && <TraineesTab onInvite={pr => { setInviteSeed(pr); setTab('calendar') }} />}
         {tab === 'activities'  && <ActivitiesTab />}
         {tab === 'locations'   && <AdminLocations />}
-        {tab === 'calendar'    && <CalendarTab />}
+        {tab === 'calendar'    && <CalendarTab seed={inviteSeed} onSeedUsed={() => setInviteSeed(null)} />}
         {tab === 'tournaments' && <TournamentsTab />}
         {tab === 'trial'       && <AdminTrialSignups />}
         {tab === 'packages'    && <AdminPackages />}
@@ -522,7 +524,7 @@ function overallStatus(enrollments) {
   return 'cancelled'
 }
 
-function TraineesTab() {
+function TraineesTab({ onInvite }) {
   const { user } = useAuth()
   const [players, setPlayers] = useState([])
   const [locations, setLocations] = useState([])
@@ -764,6 +766,7 @@ function TraineesTab() {
                       <a href={`tel:${pr.phone}`} style={{ ...outlineBtn, textDecoration: 'none' }}>התקשר</a>
                     </div>
                   )}
+                  <button onClick={() => onInvite(pr)} style={{ ...primaryBtn, padding: '7px 14px', fontSize: '13px', background: '#16a34a' }}>✉️ הזמן לאימון פרטי</button>
                 </div>
               ))}
             </div>
@@ -1247,7 +1250,7 @@ function eventFormFromData(ev) {
   return { title: ev.title || '', description: ev.description || '', is_recurring: ev.is_recurring || false, day_of_week: ev.day_of_week || 'sunday', event_date: ev.event_date || '', time: ev.time || '' }
 }
 
-function CalendarTab() {
+function CalendarTab({ seed, onSeedUsed }) {
   const [viewMode, setViewMode] = useState('week')
   const [weekOffset, setWeekOffset] = useState(0)
   const [monthOffset, setMonthOffset] = useState(0)
@@ -1266,6 +1269,8 @@ function CalendarTab() {
   const [inviteProgram, setInviteProgram] = useState('')
   const [inviteMode, setInviteMode] = useState('send') // 'send' = invite + payment link, 'manual' = record only
   const [invitePlayer, setInvitePlayer] = useState(null)
+  const [inviteAccount, setInviteAccount] = useState(null) // a site account with no player yet
+  const [allProfiles, setAllProfiles] = useState([])
   const [invitePlayerSearch, setInvitePlayerSearch] = useState('')
   const [savingInvite, setSavingInvite] = useState(false)
   const [inviteResult, setInviteResult] = useState(null)
@@ -1314,8 +1319,16 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
   useEffect(() => { fetchAll() }, [])
 
+  // Coming from "invite to a private lesson" on someone in the trainees tab.
+  useEffect(() => {
+    if (!seed) return
+    openInviteForm()
+    pickInviteAccount(seed)
+    onSeedUsed?.()
+  }, [])
+
   async function fetchAll() {
-    const [actRes, evRes, playerRes, trialRes, enrollRes, slotRes, locRes, closedRes] = await Promise.all([
+    const [actRes, evRes, playerRes, trialRes, enrollRes, slotRes, locRes, closedRes, profileRes] = await Promise.all([
       supabase.from('activities').select('*'),
       supabase.from('admin_events').select('*').order('created_at'),
       supabase.from('players').select('id, name, birth_year, user_id').order('name'),
@@ -1324,7 +1337,9 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
       supabase.from('private_slots').select('*').neq('status', 'cancelled'),
       supabase.from('locations').select('*').order('sort_order'),
       supabase.from('closed_days').select('*'),
+      supabase.from('profiles').select('id, full_name, phone, email, role, created_at'),
     ])
+    if (profileRes.data) setAllProfiles(profileRes.data)
     if (actRes.data) setActivities(actRes.data)
     if (evRes.data) setAdminEvents(evRes.data)
     if (playerRes.data) setAllPlayers(playerRes.data)
@@ -1693,14 +1708,25 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
   }
 
   function openInviteForm() {
-    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInvitePlayerSearch(''); setInviteResult(null); setInviteMode('send'); setInviteProgram('')
+    setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInviteAccount(null); setInvitePlayerSearch(''); setInviteResult(null); setInviteMode('send'); setInviteProgram('')
     setShowInviteForm(true); setShowSlotForm(false); setShowEventForm(false); setSelected(null)
+  }
+
+  // Someone who made a site account but has no player yet. The lesson is tied
+  // to their account, so the payment (and the receipt, by email) goes through
+  // their profile like any registered customer's.
+  function pickInviteAccount(pr) {
+    setInviteAccount(pr)
+    setInvitePlayer(null)
+    setInvitePlayerSearch('')
+    setInviteForm(f => ({ ...f, name: pr.full_name || '', phone: pr.phone || '' }))
   }
 
   // Link the invite to a trainee already in the system: fills in their name,
   // phone and personal price, and the lesson shows up in their account.
   async function pickInvitePlayer(p) {
     setInvitePlayer(p)
+    setInviteAccount(null)
     setInvitePlayerSearch('')
     setInviteForm(f => ({ ...f, name: p.name }))
     const [profileRes, priceRes] = await Promise.all([
@@ -1746,7 +1772,9 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
 
     const who = invitePlayer
       ? { player_id: invitePlayer.id, user_id: invitePlayer.user_id, guest_phone: f.phone.trim() || null }
-      : { guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
+      : inviteAccount
+        ? { user_id: inviteAccount.id, guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
+        : { guest_name: f.name.trim(), guest_phone: f.phone.trim() || null }
     const { data: booking, error: bookError } = await supabase.from('private_slot_bookings')
       .insert(manual
         ? { slot_id: slot.id, payment_method: inviteProgram ? 'program' : 'manual', program: inviteProgram || null, status: 'active', price: price || null, ...who }
@@ -1776,7 +1804,7 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
         location: locations.find(l => l.id === slot.location_id)?.name, link: payLinkFor(booking.id),
       }),
     })
-    setShowInviteForm(false); setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInviteProgram('')
+    setShowInviteForm(false); setInviteForm(EMPTY_INVITE_FORM); setInvitePlayer(null); setInviteAccount(null); setInviteProgram('')
     setSavingInvite(false)
   }
 
@@ -2013,19 +2041,27 @@ const [addPlayerSearch, setAddPlayerSearch] = useState('')
             </div>
             <form onSubmit={submitInvite} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ gridColumn: '1 / -1' }}>
-                {invitePlayer ? (
+                {invitePlayer || inviteAccount ? (
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '20px', padding: '4px 12px', fontSize: '13px', color: '#0e7490', fontWeight: '700' }}>
-                    מקושר למתאמן: {invitePlayer.name}
-                    <button type="button" onClick={() => setInvitePlayer(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0e7490', fontSize: '14px', padding: 0 }}>✕</button>
+                    {invitePlayer ? `מקושר למתאמן: ${invitePlayer.name}` : `מקושר לחשבון באתר: ${inviteAccount.full_name || inviteAccount.email}`}
+                    <button type="button" onClick={() => { setInvitePlayer(null); setInviteAccount(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#0e7490', fontSize: '14px', padding: 0 }}>✕</button>
                   </div>
                 ) : (
                   <>
-                    <input value={invitePlayerSearch} onChange={e => setInvitePlayerSearch(e.target.value)} placeholder="מתאמן קיים? חפש כאן (אפשרות — אפשר גם להזין שם וטלפון ידנית)" style={{ ...inputStyle, fontSize: '13px' }} />
+                    <input value={invitePlayerSearch} onChange={e => setInvitePlayerSearch(e.target.value)} placeholder="נרשם לאתר? חפש כאן לפי שם, טלפון או מייל (אפשר גם להזין שם וטלפון ידנית)" style={{ ...inputStyle, fontSize: '13px' }} />
                     {invitePlayerSearch && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px', maxHeight: '160px', overflowY: 'auto' }}>
                         {allPlayers.filter(p => p.name.includes(invitePlayerSearch)).slice(0, 8).map(p => (
                           <button key={p.id} type="button" onClick={() => pickInvitePlayer(p)} style={{ textAlign: 'right', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', color: '#0e7490', fontWeight: '600', fontSize: '13px' }}>{p.name} · יליד {p.birth_year}</button>
                         ))}
+                        {allProfiles
+                          .filter(pr => pr.role !== 'admin' && !allPlayers.some(p => p.user_id === pr.id)
+                            && [pr.full_name, pr.phone, pr.email].some(v => v?.includes(invitePlayerSearch)))
+                          .slice(0, 8).map(pr => (
+                            <button key={pr.id} type="button" onClick={() => pickInviteAccount(pr)} style={{ textAlign: 'right', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '8px 12px', cursor: 'pointer', color: '#92400e', fontWeight: '600', fontSize: '13px' }}>
+                              {pr.full_name || pr.email} · {pr.phone || 'ללא טלפון'} · נרשם/ה לאתר, עוד לא רשם/ה מתאמן
+                            </button>
+                          ))}
                       </div>
                     )}
                   </>
