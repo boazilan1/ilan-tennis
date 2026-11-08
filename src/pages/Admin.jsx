@@ -540,6 +540,8 @@ function TraineesTab() {
   const [loadingAttendance, setLoadingAttendance] = useState(false)
   const [privatePrices, setPrivatePrices] = useState({})
   const [priceDraft, setPriceDraft] = useState('')
+  const [profiles, setProfiles] = useState([])
+  const [showAccountsOnly, setShowAccountsOnly] = useState(false)
 
   useEffect(() => { fetchPlayers() }, [])
 
@@ -550,10 +552,11 @@ function TraineesTab() {
         id, name, birth_year, notes, user_id,
         enrollments(status, activity:activities(id, name, location_id, days_of_week, day_of_week, time, price))
       `).order('name'),
-      supabase.from('profiles').select('id, full_name, phone, email'),
+      supabase.from('profiles').select('id, full_name, phone, email, role, created_at'),
       supabase.from('locations').select('*').order('sort_order'),
       supabase.from('player_private_prices').select('player_id, price_per_lesson'),
     ])
+    if (profileRes.data) setProfiles(profileRes.data)
     const priceMap = {}
     priceRes.data?.forEach(r => { priceMap[r.player_id] = Number(r.price_per_lesson) })
     setPrivatePrices(priceMap)
@@ -641,6 +644,12 @@ function TraineesTab() {
     return !search || p.name.includes(search) || p.profile?.full_name?.includes(search) || p.profile?.phone?.includes(search) || p.profile?.email?.includes(search)
   }
 
+  // People who made an account but never added a player, so they appear in no list above.
+  const playerOwners = new Set(players.map(p => p.user_id))
+  const accountsOnly = profiles
+    .filter(pr => pr.role !== 'admin' && !playerOwners.has(pr.id))
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+
   const counts = {
     all: players.length,
     active: players.filter(p => overallStatus(p.enrollments) === 'active').length,
@@ -721,6 +730,44 @@ function TraineesTab() {
               <button type="submit" disabled={adding} style={{ ...primaryBtn, opacity: adding ? 0.6 : 1 }}>{adding ? 'מוסיף...' : 'הוסף'}</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Accounts that signed up but never registered anyone */}
+      {accountsOnly.length > 0 && (
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '16px', padding: '14px 16px', marginBottom: '16px' }}>
+          <button onClick={() => setShowAccountsOnly(v => !v)} style={{
+            width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'right',
+          }}>
+            <span style={{ fontWeight: '700', fontSize: '14px', color: '#92400e' }}>
+              נרשמו לאתר ועדיין לא רשמו אף אחד · {accountsOnly.length}
+            </span>
+            <span style={{ color: '#92400e', fontSize: '12px' }}>{showAccountsOnly ? 'סגור ▲' : 'הצג ▼'}</span>
+          </button>
+          {showAccountsOnly && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+              {accountsOnly.map(pr => (
+                <div key={pr.id} style={{ background: '#fff', borderRadius: '12px', padding: '10px 14px', border: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontWeight: '700', fontSize: '14px', color: '#111' }}>{pr.full_name || 'ללא שם'}</div>
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
+                      {pr.phone || 'ללא טלפון'}{pr.email ? ` · ${pr.email}` : ''}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px' }}>
+                      נרשם/ה ב-{new Date(pr.created_at).toLocaleString('he-IL', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  {pr.phone && (
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <a href={`https://wa.me/${toIntlPhone(pr.phone)}`} target="_blank" rel="noreferrer" style={{ ...outlineBtn, textDecoration: 'none', color: '#15803d', borderColor: '#bbf7d0' }}>וואטסאפ</a>
+                      <a href={`tel:${pr.phone}`} style={{ ...outlineBtn, textDecoration: 'none' }}>התקשר</a>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
