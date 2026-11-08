@@ -10,6 +10,7 @@ import AdminSettings from './AdminSettings'
 import AdminLocations from './AdminLocations'
 import AdminTrialSignups from './AdminTrialSignups'
 import AdminPackages from './AdminPackages'
+import AdminPayments from './AdminPayments'
 import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../lib/billing'
 import { formatTimeRange } from '../lib/timeRange'
 
@@ -67,6 +68,7 @@ export default function Admin() {
   const TABS = [
     { key: 'enrollments', label: 'הרשמות' },
     { key: 'trainees',    label: 'מתאמנים' },
+    { key: 'payments',    label: 'תשלומים' },
     { key: 'activities',  label: 'חוגים' },
     { key: 'locations',   label: 'מיקומים' },
     { key: 'calendar',    label: 'יומן' },
@@ -114,6 +116,7 @@ export default function Admin() {
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '28px 28px' }}>
         {tab === 'enrollments' && <EnrollmentsTab />}
         {tab === 'trainees'    && <TraineesTab onInvite={pr => { setInviteSeed(pr); setTab('calendar') }} />}
+        {tab === 'payments'    && <AdminPayments />}
         {tab === 'activities'  && <ActivitiesTab />}
         {tab === 'locations'   && <AdminLocations />}
         {tab === 'calendar'    && <CalendarTab seed={inviteSeed} onSeedUsed={() => setInviteSeed(null)} />}
