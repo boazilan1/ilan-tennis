@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Icon from './Icon'
+import { InstallLink } from './Install'
 
 export default function Footer() {
   const [title, setTitle] = useState('אילן טניס')
@@ -53,6 +54,8 @@ export default function Footer() {
           ))}
         </div>
       )}
+
+      <InstallLink />
 
       <p style={{ margin: 0, opacity: 0.4, fontSize: '11px' }}>© {new Date().getFullYear()} כל הזכויות שמורות</p>
 

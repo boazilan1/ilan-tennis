@@ -19,6 +19,7 @@ import TrialLesson from './pages/TrialLesson'
 import PrivateLessons from './pages/PrivateLessons'
 import MyAccount from './pages/MyAccount'
 import PayInvite from './pages/PayInvite'
+import { InstallBanner } from './components/Install'
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
             <Route path="/page/:slug" element={<DynamicPage />} />
           </Routes>
           <Footer />
+          <InstallBanner />
         </div>
       </AuthProvider>
     </BrowserRouter>
