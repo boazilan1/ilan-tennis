@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { isExternalLocationName } from '../lib/givatZeev'
 
 const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -97,7 +98,9 @@ export default function AdminPayments() {
     const locMap = {}
     locRes.data?.forEach(l => { locMap[l.id] = l.name })
     setLocations(locMap)
-    setEnrollments(enrRes.data || [])
+    // not paid through this site (Givat Zeev registers via the community center)
+    const externalLocIds = new Set((locRes.data || []).filter(l => isExternalLocationName(l.name)).map(l => l.id))
+    setEnrollments((enrRes.data || []).filter(e => !externalLocIds.has(actMap[e.activity_id]?.location_id)))
     const subMap = {}
     subRes.data?.forEach(s => { subMap[s.enrollment_id] = s })
     setSubs(subMap)

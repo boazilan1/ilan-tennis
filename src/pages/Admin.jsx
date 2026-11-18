@@ -12,7 +12,7 @@ import AdminTrialSignups from './AdminTrialSignups'
 import AdminPackages from './AdminPackages'
 import AdminPayments from './AdminPayments'
 import AdminGivatZeev from './AdminGivatZeev'
-import { GZ_NOTE } from '../lib/givatZeev'
+import { GZ_NOTE, isExternalLocationName } from '../lib/givatZeev'
 import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../lib/billing'
 import { formatTimeRange } from '../lib/timeRange'
 
@@ -123,7 +123,7 @@ export default function Admin() {
         {tab === 'activities'  && <ActivitiesTab />}
         {tab === 'locations'   && <AdminLocations />}
         {tab === 'calendar'    && <CalendarTab seed={inviteSeed} onSeedUsed={() => setInviteSeed(null)} />}
-        {tab === 'givatzeev'   && <AdminGivatZeev />}
+        {tab === 'givatzeev'   && <AdminGivatZeev onOpenActivities={() => setTab('activities')} />}
         {tab === 'tournaments' && <TournamentsTab />}
         {tab === 'trial'       && <AdminTrialSignups />}
         {tab === 'packages'    && <AdminPackages />}
@@ -204,7 +204,10 @@ function EnrollmentsTab() {
       supabase.from('locations').select('*').order('sort_order'),
       supabase.from('billing_subscriptions').select('*'),
     ])
-    if (enrollRes.data) setEnrollments(enrollRes.data)
+    // children of externally-registered locations (Givat Zeev) aren't registrations of this site
+    const externalLocIds = new Set((locRes.data || []).filter(l => isExternalLocationName(l.name)).map(l => l.id))
+    const externalActIds = new Set((actRes.data || []).filter(a => externalLocIds.has(a.location_id)).map(a => a.id))
+    if (enrollRes.data) setEnrollments(enrollRes.data.filter(e => !externalActIds.has(e.activity_id)))
     if (actRes.data) {
       const map = {}
       actRes.data.forEach(a => { map[a.id] = a })

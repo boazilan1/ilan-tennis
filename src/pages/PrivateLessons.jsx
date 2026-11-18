@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { withoutTrackedChildren } from '../lib/givatZeev'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { formatDateISO } from '../lib/billing'
@@ -99,6 +100,7 @@ export default function PrivateLessons() {
         supabase.from('players').select('*').eq('user_id', user.id).order('created_at'),
         supabase.from('locations').select('*').order('sort_order'),
       ])
+      if (playersRes.data) playersRes.data = withoutTrackedChildren(playersRes.data)
       if (playersRes.data) setPlayers(playersRes.data)
       if (locRes.data) setLocations(locRes.data)
 

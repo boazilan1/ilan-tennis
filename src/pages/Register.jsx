@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isExternalLocationName, withoutTrackedChildren } from '../lib/givatZeev'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { computeBillingPlan, getActivityDaysOfWeek } from '../lib/billing'
@@ -92,7 +93,7 @@ export default function Register() {
         supabase.from('enrollments').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('status', 'active'),
       ])
       if (activityRes.data) setActivity(activityRes.data)
-      if (playersRes.data) setPlayers(playersRes.data)
+      if (playersRes.data) setPlayers(withoutTrackedChildren(playersRes.data))
       if (variantsRes.data) setVariants(variantsRes.data)
       setHasActiveSibling((siblingRes.count || 0) > 0)
       setTrack('full'); setChosenDay('')
@@ -259,8 +260,10 @@ export default function Register() {
   }
 
   if (!activityId) {
-    const groups = locations.map(l => ({ location: l, items: allActivities.filter(a => a.location_id === l.id) })).filter(g => g.items.length > 0)
-    const unassigned = allActivities.filter(a => !locations.some(l => l.id === a.location_id))
+    const external = new Set(locations.filter(l => isExternalLocationName(l.name)).map(l => l.id))
+    const offered = allActivities.filter(a => !external.has(a.location_id))
+    const groups = locations.map(l => ({ location: l, items: offered.filter(a => a.location_id === l.id) })).filter(g => g.items.length > 0)
+    const unassigned = offered.filter(a => !locations.some(l => l.id === a.location_id))
     if (unassigned.length > 0) groups.push({ location: null, items: unassigned })
 
     return (

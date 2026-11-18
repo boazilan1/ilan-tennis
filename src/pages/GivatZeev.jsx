@@ -11,5 +11,5 @@ const externalDefault = {
 }
 
 export default function GivatZeev() {
-  return <LocationPage prefix="givatzeev" locationName="גבעת זאב" defaults={defaults} externalDefault={externalDefault} />
+  return <LocationPage prefix="givatzeev" locationName="גבעת זאב" defaults={defaults} externalDefault={externalDefault} externalRegistration />
 }

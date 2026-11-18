@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { formatTimeRange } from '../lib/timeRange'
+import { withoutTrackedChildren } from '../lib/givatZeev'
 
 const DAYS_HE = { sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי', wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת' }
 
@@ -30,8 +31,9 @@ export default function MyAccount() {
     if (authLoading) return
     if (!user) { navigate(`/login?redirect=${encodeURIComponent('/my-account')}`); return }
 
-    supabase.from('players').select('*').eq('user_id', user.id).order('created_at').then(({ data }) => {
-      setPlayers(data || [])
+    supabase.from('players').select('*').eq('user_id', user.id).order('created_at').then(({ data: rows }) => {
+      const data = withoutTrackedChildren(rows)
+      setPlayers(data)
       if (data?.length) setSelectedPlayerId(data[0].id)
       setLoading(false)
     })

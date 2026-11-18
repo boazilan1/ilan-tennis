@@ -1,15 +1,25 @@
 // Givat Zeev attendance tracking. Those children register and pay through the
-// community center (מתנ"ס), not through this site — so they must NOT be regular
-// activities (those show up on the public registration page and in the payments
-// report). Instead each group is an admin calendar event (admin_events) whose
-// title starts with GZ_TITLE_START, its children are players (admin_event_roster) and
-// attendance per date lives in admin_event_players — the same tables the admin
-// calendar already uses, so no database change is needed.
+// community center (מתנ"ס), not through this site. Their groups are ordinary
+// חוגים at the location "גבעת זאב", built like Nokdim's (a main activity for
+// those registered twice a week, plus a single-day variant per day), with the
+// children as players tagged GZ_NOTE enrolled in them. Attendance lives in the
+// regular `attendance` table, so the admin calendar shows the same marks.
 
 export const GZ_PREFIX = 'גבעת זאב'
+// Locations whose children register through someone else (here the community
+// center), not through this site. Their activities are real חוגים — they show
+// in the calendar, the activities tab and the location page — but they never
+// appear in the site's registration, the registrations tab or the payments.
+export const EXTERNAL_LOCATION_NAMES = ['גבעת זאב']
+export const isExternalLocationName = name => EXTERNAL_LOCATION_NAMES.includes(name)
+
 // Marks players that exist only for Givat Zeev tracking, so they can be hidden
 // from the trainees list (they're not customers of this site).
 export const GZ_NOTE = 'גבעת זאב — מעקב נוכחות בלבד'
+
+// The tracked children are stored as players owned by the admin's account; the
+// admin's own pages (personal area, registration, private lessons) shouldn't list them.
+export const withoutTrackedChildren = rows => (rows || []).filter(p => p.notes !== GZ_NOTE)
 
 export const DAYS_HE = {
   sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי',
@@ -18,21 +28,6 @@ export const DAYS_HE = {
 export const DAYS_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
-// Titles of groups managed by the Givat Zeev tab always start with this exact
-// text (note the long dash), so older hand-made calendar entries such as
-// "גבעת זאב · 16:45-17:30" are never mistaken for groups.
-export const GZ_TITLE_START = `${GZ_PREFIX} — `
-
-// "גבעת זאב — כיתות א-ב"  →  "כיתות א-ב"
-export function groupName(title) {
-  const t = title || ''
-  return (t.startsWith(GZ_TITLE_START) ? t.slice(GZ_TITLE_START.length) : t).trim() || GZ_PREFIX
-}
-
-export function groupTitle(name) {
-  return `${GZ_TITLE_START}${name.trim()}`
-}
 
 export const isoToDate = iso => new Date(`${iso}T00:00:00`)
 export const dayKeyOf = iso => DAYS_ORDER[isoToDate(iso).getDay()]
@@ -44,12 +39,6 @@ export function shiftISO(iso, days) {
   const d = isoToDate(iso)
   d.setDate(d.getDate() + days)
   return dateToISO(d)
-}
-
-// Does this group meet on the given date? (weekly groups by weekday, one-off events by date)
-export function meetsOn(ev, iso) {
-  if (ev.is_recurring) return ev.day_of_week === dayKeyOf(iso) && (!ev.end_date || iso <= ev.end_date)
-  return ev.event_date === iso
 }
 
 // Turns pasted text into a clean, de-duplicated list of names. Accepts one name

@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
-  GZ_TITLE_START, GZ_NOTE, DAYS_HE, DAYS_ORDER, groupName, groupTitle, dayKeyOf, dmy, dateToISO, shiftISO,
-  meetsOn, parseNames, summarize, reportText, buildAttendanceFile,
+  GZ_PREFIX, GZ_NOTE, DAYS_HE, dayKeyOf, dateToISO, shiftISO,
+  parseNames, summarize, reportText, buildAttendanceFile,
 } from '../lib/givatZeev'
+
+// Givat Zeev groups are ordinary חוגים at the location "גבעת זאב", built the
+// same way as Nokdim: a main activity that meets on several days (for those
+// registered twice a week) plus one single-day variant per day (for those
+// registered once a week). The calendar merges them into one slot per day —
+// this tab does the same, and writes attendance to the same table, so both
+// views always agree. The children register through the community center, so
+// they are never offered on the site's registration page.
 
 const PHONE_KEY = 'gz-report-phone'
 
@@ -13,6 +21,13 @@ const inputStyle = { width: '100%', padding: '10px 14px', borderRadius: '10px', 
 const labelStyle = { display: 'block', marginBottom: '6px', fontSize: '13px', color: '#555', fontWeight: '600' }
 const btn = (bg, color = '#fff', extra = {}) => ({ background: bg, color, border: 'none', borderRadius: '12px', padding: '12px 16px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', ...extra })
 const ghostBtn = { background: '#fff', border: '1px solid #e0e7e0', borderRadius: '10px', padding: '8px 14px', cursor: 'pointer', fontSize: '13px', color: '#555', fontWeight: '600' }
+
+const heSort = (a, b) => a.name.localeCompare(b.name, 'he')
+const daysOf = a => (a.days_of_week?.length ? a.days_of_week : [a.day_of_week]).filter(Boolean)
+const runsOn = (a, dayKey) => daysOf(a).includes(dayKey)
+const daysLabel = a => daysOf(a).map(d => DAYS_HE[d]).join(' ו')
+// What the community center calls this group (kept in the description, e.g. "כיתות ג-ד פעמיים בשבוע (2356-1-5)")
+const groupLabel = a => a.description || a.age_group || a.name
 
 function toIntlPhone(raw) {
   const digits = String(raw || '').replace(/\D/g, '')
@@ -32,161 +47,135 @@ function downloadFile(file) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-const heSort = (a, b) => a.name.localeCompare(b.name, 'he')
+// Everything the tab needs for one date. Returns data (or an error message); sets no state.
+async function fetchGivatZeev(iso) {
+  const locRes = await supabase.from('locations').select('id').eq('name', GZ_PREFIX).maybeSingle()
+  if (locRes.error) return { error: 'שגיאה בטעינת המיקום' }
+  if (!locRes.data) return { activities: [], enrollments: [], marks: {}, known: {} }
 
-export default function AdminGivatZeev() {
+  const actRes = await supabase.from('activities').select('*').eq('location_id', locRes.data.id)
+  if (actRes.error) return { error: 'שגיאה בטעינת החוגים' }
+  const activities = (actRes.data || []).sort((a, b) => (a.time || '').localeCompare(b.time || '') || (a.sort_order || 0) - (b.sort_order || 0))
+  const ids = activities.map(a => a.id)
+  if (!ids.length) return { activities, enrollments: [], marks: {}, known: {} }
+
+  const [e, m, k] = await Promise.all([
+    supabase.from('enrollments').select('id, activity_id, player_id, status, player:players(id, name)').in('activity_id', ids).in('status', ['active', 'pending']),
+    supabase.from('attendance').select('player_id, activity_id, present').in('activity_id', ids).eq('date', iso),
+    supabase.from('players').select('id, name').eq('notes', GZ_NOTE),
+  ])
+  if (e.error || m.error) return { error: 'שגיאה בטעינת הרשימות' }
+
+  const marks = {}
+  ;(m.data || []).forEach(r => { marks[r.player_id] = r.present })
+  const known = {}
+  ;(k.data || []).forEach(p => { known[p.name.toLowerCase()] = p.id })
+  const enrollments = (e.data || []).map(r => ({ id: r.id, activity_id: r.activity_id, player_id: r.player_id, status: r.status, name: r.player?.name || '—' }))
+  return { activities, enrollments, marks, known }
+}
+
+export default function AdminGivatZeev({ onOpenActivities }) {
   const { user } = useAuth()
   const [date, setDate] = useState(() => dateToISO(new Date()))
-  const [events, setEvents] = useState([])
-  const [roster, setRoster] = useState({})   // eventId -> [{ id, name }]
-  const [marks, setMarks] = useState({})     // eventId -> { playerId: true|false } for the selected date
-  const [names, setNames] = useState({})     // playerId -> name, also for kids no longer on a roster but marked
+  const [activities, setActivities] = useState([])
+  const [enrollments, setEnrollments] = useState([]) // { id, activity_id, player_id, status, name }
+  const [marks, setMarks] = useState({})             // playerId -> true|false for the selected date
+  const [knownKids, setKnownKids] = useState({})     // lowercase name -> playerId, for children already created
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [showAll, setShowAll] = useState(false)
   const [openIds, setOpenIds] = useState(() => new Set())
   const [excluded, setExcluded] = useState(() => new Set())
   const [manage, setManage] = useState(false)
-  const reqRef = useRef(0)
+  const [reloadKey, setReloadKey] = useState(0)
+  const reload = () => setReloadKey(k => k + 1)
 
-  const load = useCallback(async iso => {
-    const mine = ++reqRef.current
-    const fail = msg => { if (mine === reqRef.current) { setError(msg); setLoading(false) } }
-
-    const evRes = await supabase.from('admin_events').select('*').like('title', `${GZ_TITLE_START}%`)
-    if (evRes.error) return fail('שגיאה בטעינת הקבוצות')
-    const evs = (evRes.data || []).sort((a, b) => (a.time || '').localeCompare(b.time || '') || a.title.localeCompare(b.title, 'he'))
-    const ids = evs.map(e => e.id)
-
-    let rosterRows = [], markRows = []
-    if (ids.length) {
-      const [r, m] = await Promise.all([
-        supabase.from('admin_event_roster').select('event_id, player_id').in('event_id', ids),
-        supabase.from('admin_event_players').select('event_id, player_id, present').in('event_id', ids).eq('event_date', iso),
-      ])
-      if (r.error || m.error) return fail('שגיאה בטעינת הרשימות')
-      rosterRows = r.data || []; markRows = m.data || []
-    }
-
-    // names: all Givat Zeev kids, plus anyone else the groups reference
-    const nameMap = {}
-    const tagged = await supabase.from('players').select('id, name').eq('notes', GZ_NOTE)
-    ;(tagged.data || []).forEach(p => { nameMap[p.id] = p.name })
-    const missing = [...new Set([...rosterRows, ...markRows].map(r => r.player_id))].filter(id => !(id in nameMap))
-    if (missing.length) {
-      const extra = await supabase.from('players').select('id, name').in('id', missing)
-      ;(extra.data || []).forEach(p => { nameMap[p.id] = p.name })
-    }
-
-    const rosterMap = {}, markMap = {}
-    evs.forEach(e => { rosterMap[e.id] = []; markMap[e.id] = {} })
-    rosterRows.forEach(r => rosterMap[r.event_id]?.push({ id: r.player_id, name: nameMap[r.player_id] || '—' }))
-    Object.values(rosterMap).forEach(list => list.sort(heSort))
-    markRows.forEach(r => { if (markMap[r.event_id]) markMap[r.event_id][r.player_id] = r.present })
-
-    if (mine !== reqRef.current) return // a newer request (another date) superseded this one
-    setEvents(evs); setRoster(rosterMap); setMarks(markMap); setNames(nameMap)
-    setError(''); setLoading(false)
-  }, [])
-
-  useEffect(() => { load(date) }, [date, load])
-
-  // everyone who belongs on the sheet for this group today: the roster plus anyone marked today
-  function kidsFor(ev) {
-    const list = [...(roster[ev.id] || [])]
-    const have = new Set(list.map(k => k.id))
-    Object.keys(marks[ev.id] || {}).forEach(pid => { if (!have.has(pid)) list.push({ id: pid, name: names[pid] || '—' }) })
-    return list.sort(heSort)
-  }
-
-  const meeting = events.filter(ev => meetsOn(ev, date) || Object.keys(marks[ev.id] || {}).length > 0)
-  const shown = showAll ? events : meeting
-
-  const reportGroups = useMemo(() => meeting
-    .filter(ev => !excluded.has(ev.id))
-    .map(ev => ({
-      id: ev.id,
-      name: groupName(ev.title),
-      time: ev.time || '',
-      kids: kidsFor(ev).map(k => ({ id: k.id, name: k.name, present: marks[ev.id]?.[k.id] })),
-    }))
-    .filter(g => g.kids.length > 0),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [events, roster, marks, names, date, excluded])
-
-  function changeDate(iso) {
-    setDate(iso); setExcluded(new Set()); setNotice('')
-  }
-
-  async function setMark(ev, playerId, value) {
-    setMarks(prev => {
-      const forEvent = { ...(prev[ev.id] || {}) }
-      if (value === undefined) delete forEvent[playerId]; else forEvent[playerId] = value
-      return { ...prev, [ev.id]: forEvent }
+  // Fetching is kept apart from setting state: it only returns data.
+  useEffect(() => {
+    let stale = false // another date was picked (or a newer reload started) before this one answered
+    fetchGivatZeev(date).then(res => {
+      if (stale) return
+      if (res.error) { setError(res.error); setLoading(false); return }
+      setActivities(res.activities); setEnrollments(res.enrollments)
+      setMarks(res.marks); setKnownKids(res.known)
+      setError(''); setLoading(false)
     })
+    return () => { stale = true }
+  }, [date, reloadKey])
+
+  const dayKey = dayKeyOf(date)
+
+  // One slot per main activity that meets on this weekday: the main activity's
+  // children (twice a week) together with this weekday's variant (once a week).
+  const sessions = useMemo(() => {
+    const parents = activities.filter(a => !a.parent_activity_id && runsOn(a, dayKey))
+    return parents.map(p => {
+      const members = [p, ...activities.filter(a => a.parent_activity_id === p.id && runsOn(a, dayKey))]
+      const groups = members.map(a => ({
+        activity: a,
+        label: groupLabel(a),
+        kids: enrollments.filter(e => e.activity_id === a.id).map(e => ({ id: e.player_id, name: e.name, activityId: a.id, present: marks[e.player_id] })).sort(heSort),
+      }))
+      return { id: p.id, title: p.age_group || p.name, time: p.time || '', groups }
+    }).sort((a, b) => a.time.localeCompare(b.time))
+  }, [activities, enrollments, marks, dayKey])
+
+  // What goes into the Excel: one entry per community-center group, as they know them
+  const reportGroups = useMemo(() => sessions
+    .filter(s => !excluded.has(s.id))
+    .flatMap(s => s.groups.filter(g => g.kids.length > 0).map(g => ({
+      id: g.activity.id, name: g.label, time: s.time,
+      kids: g.kids.map(k => ({ id: k.id, name: k.name, present: k.present })),
+    }))),
+  [sessions, excluded])
+
+  function changeDate(iso) { setDate(iso); setExcluded(new Set()) }
+
+  async function setMark(kid, value) {
+    setMarks(prev => { const next = { ...prev }; if (value === undefined) delete next[kid.id]; else next[kid.id] = value; return next })
     const res = value === undefined
-      ? await supabase.from('admin_event_players').delete().eq('event_id', ev.id).eq('player_id', playerId).eq('event_date', date)
-      : await supabase.from('admin_event_players').upsert({ event_id: ev.id, player_id: playerId, event_date: date, present: value }, { onConflict: 'event_id,player_id,event_date' })
-    if (res.error) { setError('השמירה נכשלה — בדוק חיבור ונסה שוב'); load(date) }
+      ? await supabase.from('attendance').delete().eq('player_id', kid.id).eq('activity_id', kid.activityId).eq('date', date)
+      : await supabase.from('attendance').upsert({ player_id: kid.id, activity_id: kid.activityId, date, present: value }, { onConflict: 'player_id,activity_id,date' })
+    if (res.error) { setError('השמירה נכשלה — בדוק חיבור ונסה שוב'); reload() }
   }
 
-  async function markAllPresent(ev) {
-    const pending = kidsFor(ev).filter(k => marks[ev.id]?.[k.id] === undefined)
+  async function markAllPresent(session) {
+    const pending = session.groups.flatMap(g => g.kids).filter(k => k.present === undefined)
     if (!pending.length) return
-    setMarks(prev => ({ ...prev, [ev.id]: { ...(prev[ev.id] || {}), ...Object.fromEntries(pending.map(k => [k.id, true])) } }))
-    const { error: err } = await supabase.from('admin_event_players')
-      .upsert(pending.map(k => ({ event_id: ev.id, player_id: k.id, event_date: date, present: true })), { onConflict: 'event_id,player_id,event_date' })
-    if (err) { setError('השמירה נכשלה — בדוק חיבור ונסה שוב'); load(date) }
+    setMarks(prev => ({ ...prev, ...Object.fromEntries(pending.map(k => [k.id, true])) }))
+    const { error: err } = await supabase.from('attendance')
+      .upsert(pending.map(k => ({ player_id: k.id, activity_id: k.activityId, date, present: true })), { onConflict: 'player_id,activity_id,date' })
+    if (err) { setError('השמירה נכשלה — בדוק חיבור ונסה שוב'); reload() }
   }
 
-  // A group that meets on several days is one calendar event per day, all with the same title and the same children.
-  const sessionsOf = ev => events.filter(e => e.title === ev.title)
-
-  async function createGroup({ name, days, time }) {
-    if (events.some(e => e.title === groupTitle(name))) { setError('כבר יש קבוצה בשם הזה'); return false }
-    const { error: err } = await supabase.from('admin_events').insert(days.map(day => ({
-      title: groupTitle(name), is_recurring: true, day_of_week: day, time: time.trim() || null, status: 'scheduled',
-    })))
-    if (err) { setError('יצירת הקבוצה נכשלה'); return false }
-    await load(date)
-    return true
-  }
-
-  async function addKids(ev, text) {
+  async function addKids(activity, text) {
     const all = parseNames(text)
-    const have = new Set(kidsFor(ev).map(k => k.name.toLowerCase()))
+    const have = new Set(enrollments.filter(e => e.activity_id === activity.id).map(e => e.name.toLowerCase()))
     const fresh = all.filter(n => !have.has(n.toLowerCase()))
     if (fresh.length) {
-      const year = new Date().getFullYear() // birth_year is required by the table; these kids' ages aren't tracked
-      const created = await supabase.from('players').insert(fresh.map(name => ({ name, birth_year: year, notes: GZ_NOTE, user_id: user.id }))).select('id')
-      if (created.error) { setError('הוספת הילדים נכשלה'); return }
-      const linked = await supabase.from('admin_event_roster').insert(sessionsOf(ev).flatMap(e => created.data.map(p => ({ event_id: e.id, player_id: p.id }))))
-      if (linked.error) { setError('הוספת הילדים לקבוצה נכשלה'); return }
-      await load(date)
+      // a child who is already in another group keeps their single record
+      const toCreate = fresh.filter(n => !knownKids[n.toLowerCase()])
+      const ids = {}
+      fresh.forEach(n => { if (knownKids[n.toLowerCase()]) ids[n.toLowerCase()] = knownKids[n.toLowerCase()] })
+      if (toCreate.length) {
+        const year = new Date().getFullYear() // birth_year is required by the table; these children's ages aren't tracked
+        const created = await supabase.from('players').insert(toCreate.map(name => ({ name, birth_year: year, notes: GZ_NOTE, user_id: user.id }))).select('id, name')
+        if (created.error) { setError('הוספת הילדים נכשלה'); return }
+        created.data.forEach(p => { ids[p.name.toLowerCase()] = p.id })
+      }
+      const linked = await supabase.from('enrollments').insert(fresh.map(n => ({ activity_id: activity.id, player_id: ids[n.toLowerCase()], user_id: user.id, status: 'active' })))
+      if (linked.error) { setError('הוספת הילדים לחוג נכשלה'); return }
+      reload()
     }
     const skipped = all.length - fresh.length
     setNotice(`נוספו ${fresh.length} ילדים${skipped ? ` (${skipped} כבר היו ברשימה)` : ''}`)
   }
 
-  async function removeKid(ev, kid) {
-    if (!window.confirm(`להסיר את ${kid.name} מהקבוצה?\nהנוכחות שלו בימים קודמים תישמר.`)) return
-    const ids = sessionsOf(ev).map(e => e.id)
-    await supabase.from('admin_event_roster').delete().in('event_id', ids).eq('player_id', kid.id)
-    await supabase.from('admin_event_players').delete().in('event_id', ids).eq('player_id', kid.id).eq('event_date', date)
-    await load(date)
-  }
-
-  async function deleteGroup(ev) {
-    if (!window.confirm(`למחוק את הקבוצה "${groupName(ev.title)}"?\nגם כל הנוכחות ההיסטורית שלה תימחק, ואי אפשר לשחזר.`)) return
-    const orphans = (roster[ev.id] || []).map(k => k.id)
-    const { error: err } = await supabase.from('admin_events').delete().eq('title', ev.title)
-    if (err) { setError('המחיקה נכשלה'); return }
-    // children who are in no other group are no longer needed
-    const stillUsed = new Set(events.filter(e => e.title !== ev.title).flatMap(e => (roster[e.id] || []).map(k => k.id)))
-    const unused = orphans.filter(id => !stillUsed.has(id))
-    if (unused.length) await supabase.from('players').delete().in('id', unused).eq('notes', GZ_NOTE)
-    await load(date)
+  async function removeKid(enrollment) {
+    if (!window.confirm(`להסיר את ${enrollment.name} מהחוג?\nהנוכחות שלו בימים קודמים תישמר.`)) return
+    const { error: err } = await supabase.from('enrollments').delete().eq('id', enrollment.id)
+    if (err) { setError('ההסרה נכשלה'); return }
+    reload()
   }
 
   const isToday = date === dateToISO(new Date())
@@ -198,7 +187,7 @@ export default function AdminGivatZeev() {
       <div>
         <h2 style={{ margin: '0 0 4px', fontSize: '20px', color: '#1a472a', fontWeight: '800' }}>גבעת זאב — נוכחות</h2>
         <p style={{ margin: 0, fontSize: '13px', color: '#888', lineHeight: 1.5 }}>
-          הילדים נרשמים דרך המתנ״ס. כאן מסמנים מי הגיע, ובסוף היום שולחים להם אקסל בוואטסאפ.
+          הילדים נרשמים דרך המתנ״ס. כאן מסמנים מי הגיע (גם ביומן רואים את אותה נוכחות), ובסוף היום שולחים להם אקסל בוואטסאפ.
         </p>
       </div>
 
@@ -216,62 +205,63 @@ export default function AdminGivatZeev() {
           <button onClick={() => changeDate(shiftISO(date, 1))} style={{ ...ghostBtn, padding: '10px', fontSize: '12px', flexShrink: 0 }}>יום הבא</button>
         </div>
         <div style={{ fontSize: '12px', color: '#888', marginTop: '8px', textAlign: 'center' }}>
-          יום {DAYS_HE[dayKeyOf(date)]}{isToday ? ' · היום' : ''}
+          יום {DAYS_HE[dayKey]}{isToday ? ' · היום' : ''}
           {!isToday && <button onClick={() => changeDate(dateToISO(new Date()))} style={{ background: 'none', border: 'none', color: '#1a472a', fontWeight: '700', cursor: 'pointer', fontSize: '12px', marginRight: '10px', textDecoration: 'underline' }}>חזרה להיום</button>}
         </div>
       </div>
 
-      {/* groups of the day */}
-      {events.length === 0 ? (
+      {/* slots of the day */}
+      {activities.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', color: '#666', fontSize: '14px', lineHeight: 1.6 }}>
-          עדיין אין קבוצות של גבעת זאב.<br />
-          <button onClick={() => setManage(true)} style={{ ...btn('#1a472a'), marginTop: '12px' }}>+ יצירת קבוצה ראשונה</button>
+          עדיין אין חוגים במיקום ״גבעת זאב״.<br />
+          {onOpenActivities && <button onClick={onOpenActivities} style={{ ...btn('#1a472a'), marginTop: '12px' }}>לניהול החוגים</button>}
         </div>
-      ) : shown.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', color: '#888', fontSize: '14px' }}>
-          אין קבוצות של גבעת זאב ביום {DAYS_HE[dayKeyOf(date)]}.
-          <div><button onClick={() => setShowAll(true)} style={{ ...ghostBtn, marginTop: '10px' }}>הצג את כל הקבוצות</button></div>
-        </div>
+      ) : sessions.length === 0 ? (
+        <div style={{ ...card, textAlign: 'center', color: '#888', fontSize: '14px' }}>אין חוגים של גבעת זאב ביום {DAYS_HE[dayKey]}.</div>
       ) : (
-        shown.map(ev => {
-          const kids = kidsFor(ev)
-          const present = kids.filter(k => marks[ev.id]?.[k.id] === true).length
-          const unmarked = kids.filter(k => marks[ev.id]?.[k.id] === undefined).length
-          const open = openIds.has(ev.id) || (openIds.size === 0 && shown.length === 1)
+        sessions.map(s => {
+          const kids = s.groups.flatMap(g => g.kids.map(k => ({ ...k, group: g.label }))).sort(heSort)
+          const present = kids.filter(k => k.present === true).length
+          const unmarked = kids.filter(k => k.present === undefined).length
+          const open = openIds.has(s.id) || (openIds.size === 0 && sessions.length === 1)
+          const mixed = s.groups.filter(g => g.kids.length > 0).length > 1
           return (
-            <div key={ev.id} style={card}>
+            <div key={s.id} style={card}>
               <button
-                onClick={() => setOpenIds(prev => { const next = new Set(prev); if (open) next.delete(ev.id); else next.add(ev.id); return next })}
+                onClick={() => setOpenIds(prev => { const next = new Set(prev); if (open) next.delete(s.id); else next.add(s.id); return next })}
                 style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textAlign: 'right' }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '800', fontSize: '16px', color: '#111' }}>{groupName(ev.title)}</div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>{ev.time || ''}{ev.is_recurring && ev.day_of_week ? ` · כל יום ${DAYS_HE[ev.day_of_week]}` : ''}</div>
+                  <div style={{ fontWeight: '800', fontSize: '16px', color: '#111' }}>{s.title}</div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>{s.time}</div>
                 </div>
                 <span style={{ background: unmarked === 0 && kids.length ? '#dcfce7' : '#f3f4f6', color: unmarked === 0 && kids.length ? '#16a34a' : '#555', borderRadius: '10px', padding: '4px 12px', fontSize: '14px', fontWeight: '700' }}>{present}/{kids.length}</span>
                 <span style={{ color: '#aaa', fontSize: '14px' }}>{open ? '▲' : '▼'}</span>
               </button>
 
               {open && (kids.length === 0 ? (
-                <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center', margin: '14px 0 0' }}>אין ילדים בקבוצה. אפשר להוסיף בניהול למטה.</p>
+                <p style={{ color: '#aaa', fontSize: '13px', textAlign: 'center', margin: '14px 0 0' }}>אין ילדים רשומים. אפשר להוסיף בניהול למטה.</p>
               ) : (
                 <div style={{ marginTop: '14px' }}>
                   {unmarked > 0 && (
-                    <button onClick={() => markAllPresent(ev)} style={{ ...btn('#16a34a', '#fff', { width: '100%', marginBottom: '10px', padding: '11px' }) }}>✅ כולם הגיעו ({unmarked} שלא סומנו)</button>
+                    <button onClick={() => markAllPresent(s)} style={{ ...btn('#16a34a', '#fff', { width: '100%', marginBottom: '10px', padding: '11px' }) }}>✅ כולם הגיעו ({unmarked} שלא סומנו)</button>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {kids.map(k => {
-                      const v = marks[ev.id]?.[k.id]
+                      const v = k.present
                       const next = v === undefined ? true : v === true ? false : undefined
                       return (
-                        <button key={k.id} onClick={() => setMark(ev, k.id, next)} style={{
+                        <button key={`${k.id}-${k.activityId}`} onClick={() => setMark(k, next)} style={{
                           display: 'flex', alignItems: 'center', gap: '12px', width: '100%', textAlign: 'right', cursor: 'pointer',
                           background: v === true ? '#f0fdf4' : v === false ? '#fef2f2' : '#fafafa',
                           border: `2px solid ${v === true ? '#bbf7d0' : v === false ? '#fecaca' : '#eee'}`,
                           borderRadius: '12px', padding: '12px 14px',
                         }}>
                           <span style={{ fontSize: '22px', minWidth: '26px' }}>{v === true ? '✅' : v === false ? '❌' : '⬜'}</span>
-                          <span style={{ fontWeight: '600', fontSize: '15px', color: '#111' }}>{k.name}</span>
+                          <span>
+                            <span style={{ display: 'block', fontWeight: '600', fontSize: '15px', color: '#111' }}>{k.name}</span>
+                            {mixed && <span style={{ display: 'block', fontSize: '11px', color: '#999' }}>{k.group}</span>}
+                          </span>
                         </button>
                       )
                     })}
@@ -284,39 +274,35 @@ export default function AdminGivatZeev() {
         })
       )}
 
-      {events.length > 0 && !showAll && meeting.length < events.length && (
-        <button onClick={() => setShowAll(true)} style={{ ...ghostBtn, alignSelf: 'center' }}>הצג גם קבוצות שלא נפגשות ביום הזה</button>
-      )}
-      {showAll && <button onClick={() => setShowAll(false)} style={{ ...ghostBtn, alignSelf: 'center' }}>הצג רק קבוצות של היום</button>}
-
       {/* send */}
-      {meeting.length > 0 && (
+      {sessions.length > 0 && (
         <SendReport
           date={date}
           groups={reportGroups}
-          candidates={meeting.map(ev => ({ id: ev.id, name: groupName(ev.title) }))}
+          candidates={sessions.map(s => ({ id: s.id, name: `${s.title} · ${s.time}` }))}
           excluded={excluded}
           toggleExcluded={id => setExcluded(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })}
         />
       )}
 
       {/* manage */}
-      <div style={card}>
-        <button onClick={() => setManage(m => !m)} style={{ display: 'flex', width: '100%', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '15px', fontWeight: '800', color: '#1a472a' }}>
-          <span>⚙️ ניהול קבוצות וילדים</span><span style={{ color: '#aaa' }}>{manage ? '▲' : '▼'}</span>
-        </button>
-        {manage && (
-          <Manager
-            events={events}
-            kidsFor={kidsFor}
-            notice={notice}
-            onCreate={createGroup}
-            onAddKids={addKids}
-            onRemoveKid={removeKid}
-            onDeleteGroup={deleteGroup}
-          />
-        )}
-      </div>
+      {activities.length > 0 && (
+        <div style={card}>
+          <button onClick={() => setManage(m => !m)} style={{ display: 'flex', width: '100%', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: '15px', fontWeight: '800', color: '#1a472a' }}>
+            <span>⚙️ ניהול הילדים בכל חוג</span><span style={{ color: '#aaa' }}>{manage ? '▲' : '▼'}</span>
+          </button>
+          {manage && (
+            <Manager
+              activities={activities}
+              enrollments={enrollments}
+              notice={notice}
+              onAddKids={addKids}
+              onRemoveKid={removeKid}
+              onOpenActivities={onOpenActivities}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -379,7 +365,7 @@ function SendReport({ date, groups, candidates, excluded, toggleExcluded }) {
       )}
 
       {groups.length === 0 ? (
-        <p style={{ color: '#888', fontSize: '13px', margin: '8px 0 0' }}>אין ילדים ברשימות של הקבוצות שנבחרו.</p>
+        <p style={{ color: '#888', fontSize: '13px', margin: '8px 0 0' }}>אין ילדים ברשימות של החוגים שנבחרו.</p>
       ) : (
         <>
           <div style={{ fontSize: '14px', color: '#374151', margin: '6px 0 12px', lineHeight: 1.6 }}>
@@ -404,106 +390,66 @@ function SendReport({ date, groups, candidates, excluded, toggleExcluded }) {
   )
 }
 
-function Manager({ events, kidsFor, notice, onCreate, onAddKids, onRemoveKid, onDeleteGroup }) {
-  const [form, setForm] = useState({ name: '', days: [], time: '' })
-  const [creating, setCreating] = useState(events.length === 0)
+function Manager({ activities, enrollments, notice, onAddKids, onRemoveKid, onOpenActivities }) {
   const [pasteFor, setPasteFor] = useState(null)
   const [pasteText, setPasteText] = useState('')
   const [busy, setBusy] = useState(false)
   const [expanded, setExpanded] = useState(null)
 
-  async function submitGroup(e) {
-    e.preventDefault()
-    if (!form.name.trim() || form.days.length === 0) return
+  async function submitKids(activity) {
     setBusy(true)
-    const ok = await onCreate(form)
-    setBusy(false)
-    if (ok) { setForm({ name: '', days: form.days, time: '' }); setCreating(false) }
-  }
-
-  async function submitKids(ev) {
-    setBusy(true)
-    await onAddKids(ev, pasteText)
+    await onAddKids(activity, pasteText)
     setBusy(false)
     setPasteText(''); setPasteFor(null)
   }
+
+  // main activities first, each followed by its single-day variants
+  const ordered = activities.filter(a => !a.parent_activity_id).flatMap(p => [p, ...activities.filter(a => a.parent_activity_id === p.id)])
 
   return (
     <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
       {notice && <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', borderRadius: '10px', padding: '8px 12px', fontSize: '13px' }}>{notice}</div>}
 
-      {[...new Map([...events].sort((a, b) => DAYS_ORDER.indexOf(a.day_of_week) - DAYS_ORDER.indexOf(b.day_of_week)).map(e => [e.title, e])).values()].map(ev => {
-        const kids = kidsFor(ev)
-        const sessions = events.filter(e => e.title === ev.title)
-        const when = sessions.map(e => (e.is_recurring && e.day_of_week ? DAYS_HE[e.day_of_week] : e.event_date ? dmy(e.event_date) : '')).filter(Boolean).join(' ו')
+      {ordered.map(a => {
+        const kids = enrollments.filter(e => e.activity_id === a.id).sort(heSort)
+        const isVariant = !!a.parent_activity_id
         return (
-          <div key={ev.id} style={{ border: '1px solid #eee', borderRadius: '12px', padding: '12px 14px' }}>
+          <div key={a.id} style={{ border: '1px solid #eee', borderRadius: '12px', padding: '12px 14px', marginRight: isVariant ? '18px' : 0, background: isVariant ? '#fafcfa' : '#fff' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <div style={{ flex: '1 1 140px' }}>
-                <div style={{ fontWeight: '700', fontSize: '15px' }}>{groupName(ev.title)}</div>
-                <div style={{ fontSize: '12px', color: '#888' }}>{when ? `יום ${when}` : ''}{ev.time ? ` · ${ev.time}` : ''} · {kids.length} ילדים</div>
+                <div style={{ fontWeight: '700', fontSize: '14px' }}>{groupLabel(a)}</div>
+                <div style={{ fontSize: '12px', color: '#888' }}>יום {daysLabel(a)} · {a.time} · {kids.length} ילדים</div>
               </div>
-              <button onClick={() => { setPasteFor(pasteFor === ev.id ? null : ev.id); setPasteText('') }} style={{ ...ghostBtn, color: '#1a472a', borderColor: '#1a472a' }}>+ הוסף ילדים</button>
-              <button onClick={() => setExpanded(expanded === ev.id ? null : ev.id)} style={ghostBtn}>{expanded === ev.id ? 'סגור רשימה' : 'הרשימה'}</button>
+              <button onClick={() => { setPasteFor(pasteFor === a.id ? null : a.id); setPasteText('') }} style={{ ...ghostBtn, color: '#1a472a', borderColor: '#1a472a' }}>+ הוסף ילדים</button>
+              <button onClick={() => setExpanded(expanded === a.id ? null : a.id)} style={ghostBtn}>{expanded === a.id ? 'סגור' : 'הרשימה'}</button>
             </div>
 
-            {pasteFor === ev.id && (
+            {pasteFor === a.id && (
               <div style={{ marginTop: '10px' }}>
                 <label style={labelStyle}>שמות הילדים — שם בכל שורה (אפשר להדביק רשימה מהמתנ״ס או מאקסל)</label>
                 <textarea value={pasteText} onChange={e => setPasteText(e.target.value)} rows={6} placeholder={'דני כהן\nנועה לוי\nיובל ברק'} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} autoFocus />
-                <button onClick={() => submitKids(ev)} disabled={busy || !pasteText.trim()} style={{ ...btn('#1a472a', '#fff', { width: '100%', marginTop: '8px', opacity: busy || !pasteText.trim() ? 0.6 : 1 }) }}>
-                  {busy ? 'מוסיף...' : `הוסף ${parseNames(pasteText).length || ''} ילדים לקבוצה`}
+                <button onClick={() => submitKids(a)} disabled={busy || !pasteText.trim()} style={{ ...btn('#1a472a', '#fff', { width: '100%', marginTop: '8px', opacity: busy || !pasteText.trim() ? 0.6 : 1 }) }}>
+                  {busy ? 'מוסיף...' : `הוסף ${parseNames(pasteText).length || ''} ילדים לחוג`}
                 </button>
               </div>
             )}
 
-            {expanded === ev.id && (
+            {expanded === a.id && (
               <div style={{ marginTop: '10px' }}>
-                {kids.length === 0 ? <p style={{ color: '#aaa', fontSize: '13px', margin: 0 }}>אין ילדים בקבוצה</p> : kids.map(k => (
+                {kids.length === 0 ? <p style={{ color: '#aaa', fontSize: '13px', margin: 0 }}>אין ילדים בחוג</p> : kids.map(k => (
                   <div key={k.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #f5f5f5', fontSize: '14px' }}>
                     <span>{k.name}</span>
-                    <button onClick={() => onRemoveKid(ev, k)} aria-label={`הסר את ${k.name}`} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '13px' }}>הסר</button>
+                    <button onClick={() => onRemoveKid(k)} aria-label={`הסר את ${k.name}`} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '13px' }}>הסר</button>
                   </div>
                 ))}
-                <button onClick={() => onDeleteGroup(ev)} style={{ ...ghostBtn, color: '#dc2626', borderColor: '#fecaca', marginTop: '12px' }}>🗑 מחק את הקבוצה</button>
               </div>
             )}
           </div>
         )
       })}
 
-      {creating ? (
-        <form onSubmit={submitGroup} style={{ border: '1px dashed #bbb', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div>
-            <label style={labelStyle}>שם הקבוצה</label>
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="כיתות א-ב" style={inputStyle} required autoFocus />
-          </div>
-          <div>
-            <label style={labelStyle}>ימים (אפשר יותר מאחד)</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {DAYS_ORDER.slice(0, 6).map(d => {
-                const on = form.days.includes(d)
-                return (
-                  <button type="button" key={d} onClick={() => setForm(f => ({ ...f, days: on ? f.days.filter(x => x !== d) : [...f.days, d] }))} style={{
-                    padding: '8px 14px', borderRadius: '20px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-                    background: on ? '#1a472a' : '#fff', color: on ? '#fff' : '#1a472a', border: '1px solid #1a472a',
-                  }}>{DAYS_HE[d]}</button>
-                )
-              })}
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle}>שעה</label>
-            <input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} style={inputStyle} />
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="submit" disabled={busy || form.days.length === 0} style={{ ...btn('#1a472a'), flex: 1, opacity: busy || form.days.length === 0 ? 0.6 : 1 }}>{busy ? 'יוצר...' : 'צור קבוצה'}</button>
-            <button type="button" onClick={() => setCreating(false)} style={ghostBtn}>ביטול</button>
-          </div>
-          <p style={{ margin: 0, fontSize: '11px', color: '#aaa' }}>הקבוצה תופיע גם ביומן, כל שבוע בימים שנבחרו.</p>
-        </form>
-      ) : (
-        <button onClick={() => setCreating(true)} style={{ ...ghostBtn, padding: '11px', fontSize: '14px', borderStyle: 'dashed' }}>+ קבוצה חדשה</button>
+      {onOpenActivities && (
+        <button onClick={onOpenActivities} style={{ ...ghostBtn, padding: '11px', fontSize: '14px', borderStyle: 'dashed' }}>להוספה / עריכה של חוגים — לשונית ״חוגים״</button>
       )}
     </div>
   )

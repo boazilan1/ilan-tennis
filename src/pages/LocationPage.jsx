@@ -17,7 +17,7 @@ function formatDays(a) {
 // A location landing page (hero photo, intro text, schedule table) shared by
 // every location that gets its own page — parameterized by the site_settings
 // key prefix and the row in `locations` used to find its slots.
-export default function LocationPage({ prefix, locationName, defaults, externalDefault }) {
+export default function LocationPage({ prefix, locationName, defaults, externalDefault, externalRegistration = false }) {
   const DEFAULTS = {
     [`${prefix}_hero_title`]: locationName,
     [`${prefix}_hero_title_size`]: '36',
@@ -59,7 +59,8 @@ export default function LocationPage({ prefix, locationName, defaults, externalD
   const gs = k => Number(g(k)) || Number(DEFAULTS[k]) || 14
 
   const registerLink = '/register'
-  const externalUrl = slots.length === 0 ? g(`${prefix}_external_url`) : ''
+  // externalRegistration: the slots are shown as a schedule, but registering happens on the other site
+  const externalUrl = slots.length === 0 || externalRegistration ? g(`${prefix}_external_url`) : ''
 
   return (
     <main style={{ direction: 'rtl', flex: 1, background: '#f3f6f3' }}>
@@ -149,11 +150,19 @@ export default function LocationPage({ prefix, locationName, defaults, externalD
                   </div>
                 ))}
               </div>
-              <Link to={registerLink} style={{
-                background: '#1a472a', color: 'white', textDecoration: 'none',
-                borderRadius: '30px', padding: '12px 36px', fontWeight: '700', fontSize: '15px',
-                boxShadow: '0 4px 14px rgba(26,71,42,0.25)',
-              }}>{g(`${prefix}_hero_cta`)}</Link>
+              {externalUrl ? (
+                <a href={externalUrl} target="_blank" rel="noreferrer" style={{
+                  background: '#1a472a', color: 'white', textDecoration: 'none',
+                  borderRadius: '30px', padding: '12px 36px', fontWeight: '700', fontSize: '15px',
+                  boxShadow: '0 4px 14px rgba(26,71,42,0.25)',
+                }}>{g(`${prefix}_external_label`)}</a>
+              ) : (
+                <Link to={registerLink} style={{
+                  background: '#1a472a', color: 'white', textDecoration: 'none',
+                  borderRadius: '30px', padding: '12px 36px', fontWeight: '700', fontSize: '15px',
+                  boxShadow: '0 4px 14px rgba(26,71,42,0.25)',
+                }}>{g(`${prefix}_hero_cta`)}</Link>
+              )}
             </div>
           ) : externalUrl ? (
             <div style={{
