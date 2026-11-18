@@ -146,7 +146,7 @@ export default function LocationPage({ prefix, locationName, defaults, externalD
                     <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="calendar" size={17} color="var(--sand)" />{formatDays(slot)}</span>
                     {slot.time && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="clock" size={17} color="var(--sand)" />{slot.time}</span>}
                     {slot.age_group && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="users" size={17} color="var(--sand)" />{slot.age_group}</span>}
-                    {slot.price && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{slot.price} לחודש</span>}
+                    {Number(slot.price) > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Icon name="tag" size={17} color="var(--sand)" />₪{slot.price} לחודש</span>}
                   </div>
                 ))}
               </div>
