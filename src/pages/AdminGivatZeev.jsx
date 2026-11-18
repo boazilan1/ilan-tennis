@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
-  GZ_PREFIX, GZ_NOTE, DAYS_HE, DAYS_ORDER, groupName, groupTitle, dayKeyOf, dmy, dateToISO, shiftISO,
+  GZ_TITLE_START, GZ_NOTE, DAYS_HE, DAYS_ORDER, groupName, groupTitle, dayKeyOf, dmy, dateToISO, shiftISO,
   meetsOn, parseNames, summarize, reportText, buildAttendanceFile,
 } from '../lib/givatZeev'
 
@@ -54,7 +54,7 @@ export default function AdminGivatZeev() {
     const mine = ++reqRef.current
     const fail = msg => { if (mine === reqRef.current) { setError(msg); setLoading(false) } }
 
-    const evRes = await supabase.from('admin_events').select('*').like('title', `${GZ_PREFIX}%`)
+    const evRes = await supabase.from('admin_events').select('*').like('title', `${GZ_TITLE_START}%`)
     if (evRes.error) return fail('שגיאה בטעינת הקבוצות')
     const evs = (evRes.data || []).sort((a, b) => (a.time || '').localeCompare(b.time || '') || a.title.localeCompare(b.title, 'he'))
     const ids = evs.map(e => e.id)

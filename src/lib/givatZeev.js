@@ -2,7 +2,7 @@
 // community center (מתנ"ס), not through this site — so they must NOT be regular
 // activities (those show up on the public registration page and in the payments
 // report). Instead each group is an admin calendar event (admin_events) whose
-// title starts with GZ_PREFIX, its children are players (admin_event_roster) and
+// title starts with GZ_TITLE_START, its children are players (admin_event_roster) and
 // attendance per date lives in admin_event_players — the same tables the admin
 // calendar already uses, so no database change is needed.
 
@@ -19,14 +19,19 @@ export const DAYS_ORDER = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
+// Titles of groups managed by the Givat Zeev tab always start with this exact
+// text (note the long dash), so older hand-made calendar entries such as
+// "גבעת זאב · 16:45-17:30" are never mistaken for groups.
+export const GZ_TITLE_START = `${GZ_PREFIX} — `
+
 // "גבעת זאב — כיתות א-ב"  →  "כיתות א-ב"
 export function groupName(title) {
-  const rest = (title || '').slice(GZ_PREFIX.length).replace(/^[\s–—:·|-]+/, '').trim()
-  return rest || title || GZ_PREFIX
+  const t = title || ''
+  return (t.startsWith(GZ_TITLE_START) ? t.slice(GZ_TITLE_START.length) : t).trim() || GZ_PREFIX
 }
 
 export function groupTitle(name) {
-  return `${GZ_PREFIX} — ${name.trim()}`
+  return `${GZ_TITLE_START}${name.trim()}`
 }
 
 export const isoToDate = iso => new Date(`${iso}T00:00:00`)
