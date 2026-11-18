@@ -11,6 +11,8 @@ import AdminLocations from './AdminLocations'
 import AdminTrialSignups from './AdminTrialSignups'
 import AdminPackages from './AdminPackages'
 import AdminPayments from './AdminPayments'
+import AdminGivatZeev from './AdminGivatZeev'
+import { GZ_NOTE } from '../lib/givatZeev'
 import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../lib/billing'
 import { formatTimeRange } from '../lib/timeRange'
 
@@ -72,6 +74,7 @@ export default function Admin() {
     { key: 'activities',  label: 'חוגים' },
     { key: 'locations',   label: 'מיקומים' },
     { key: 'calendar',    label: 'יומן' },
+    { key: 'givatzeev',   label: 'גבעת זאב' },
     { key: 'tournaments', label: 'תחרויות' },
     { key: 'trial',       label: 'שיעורי ניסיון' },
     { key: 'packages',    label: 'חבילות' },
@@ -120,6 +123,7 @@ export default function Admin() {
         {tab === 'activities'  && <ActivitiesTab />}
         {tab === 'locations'   && <AdminLocations />}
         {tab === 'calendar'    && <CalendarTab seed={inviteSeed} onSeedUsed={() => setInviteSeed(null)} />}
+        {tab === 'givatzeev'   && <AdminGivatZeev />}
         {tab === 'tournaments' && <TournamentsTab />}
         {tab === 'trial'       && <AdminTrialSignups />}
         {tab === 'packages'    && <AdminPackages />}
@@ -568,7 +572,8 @@ function TraineesTab({ onInvite }) {
     if (playerRes.data && profileRes.data) {
       const profileMap = {}
       profileRes.data.forEach(p => { profileMap[p.id] = p })
-      setPlayers(playerRes.data.map(p => ({ ...p, profile: profileMap[p.user_id] || null })))
+      // Givat Zeev children exist only for attendance tracking (they register through the מתנ"ס) — not customers of this site
+      setPlayers(playerRes.data.filter(p => p.notes !== GZ_NOTE).map(p => ({ ...p, profile: profileMap[p.user_id] || null })))
     }
     if (locRes.data) setLocations(locRes.data)
     setLoading(false)
