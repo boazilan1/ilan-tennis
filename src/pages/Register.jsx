@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { isExternalLocationName, withoutTrackedChildren } from '../lib/givatZeev'
 import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
-import { computeBillingPlan, getActivityDaysOfWeek } from '../lib/billing'
+import { computeBillingPlan, getActivityDaysOfWeek, firstPaymentDone } from '../lib/billing'
 
 const DEFAULT_TERMS = 'אני מאשר/ת כי קראתי והבנתי את תנאי ההרשמה לחוג, לרבות מדיניות התשלום והביטול, ומסכים/ה להם.'
 
@@ -157,6 +157,26 @@ export default function Register() {
         return
       }
 
+      // A child who already paid for this group (any track) must not be charged again.
+      // The first payment stays "waiting for approval" until the academy confirms it,
+      // so a second try — often with the other track — used to take a second payment.
+      if (!(showNewPlayer || players.length === 0)) {
+        const rootId = activity.parent_activity_id || activity.id
+        const { data: family } = await supabase.from('activities').select('id').or(`id.eq.${rootId},parent_activity_id.eq.${rootId}`)
+        const familyIds = family?.length ? family.map(a => a.id) : [activity.id]
+        const { data: existing } = await supabase.from('enrollments')
+          .select('id, status, billing:billing_subscriptions(status)')
+          .eq('player_id', playerId).in('activity_id', familyIds).in('status', ['pending', 'active'])
+        const taken = (existing || []).find(x => x.status === 'active' || firstPaymentDone(x.billing?.status))
+        if (taken) {
+          setError(taken.status === 'active'
+            ? 'השחקן כבר רשום ופעיל בחוג הזה. לשינוי מסלול (פעם או פעמיים בשבוע) פנו אלינו.'
+            : 'התשלום על ההרשמה הזו כבר התקבל והיא ממתינה לאישור שלנו — אין צורך לשלם שוב. לשינוי מסלול (פעם או פעמיים בשבוע) פנו אלינו.')
+          setSubmitting(false)
+          return
+        }
+      }
+
       const { data: newEnrollment, error: enrollError } = await supabase
         .rpc('upsert_registration', { p_player_id: playerId, p_activity_id: effectiveActivity.id, p_signature_name: null, p_signature_data: null })
         .select()
@@ -211,6 +231,11 @@ export default function Register() {
           if (payData.url) paymentUrl = payData.url
           if (payData.standingOrderLink) standingOrderLink = payData.standingOrderLink
           if (payData.standingOrderPlan) standingOrderPlan = payData.standingOrderPlan
+        } else if (payRes.status === 409) {
+          const conflict = await payRes.json().catch(() => null)
+          setError(conflict?.error || 'התשלום על ההרשמה הזו כבר התקבל — אין צורך לשלם שוב.')
+          setSubmitting(false)
+          return
         } else {
           console.error('register-payment failed', payRes.status)
         }

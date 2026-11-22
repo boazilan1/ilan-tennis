@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from './_lib/supabaseAdmin.js'
 import { createPaymentForm, createClient } from './_lib/morning.js'
-import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO } from '../src/lib/billing.js'
+import { computeBillingPlan, getActivityDaysOfWeek, formatDateISO, firstPaymentDone } from '../src/lib/billing.js'
 
 // Morning rejects phones with dashes/spaces or a +972 prefix (errorCode 2601).
 function normalizePhone(raw) {
@@ -31,13 +31,34 @@ export default async function handler(req, res) {
 
     const { data: enrollment, error: enrollError } = await supabase
       .from('enrollments')
-      .select('id, user_id, created_at, activity:activities(id, name, price, day_of_week, days_of_week, payment_link, sibling_discount_price, sibling_payment_link), player:players(name)')
+      .select('id, user_id, player_id, created_at, activity:activities(id, parent_activity_id, name, price, day_of_week, days_of_week, payment_link, sibling_discount_price, sibling_payment_link), player:players(name)')
       .eq('id', enrollmentId)
       .single()
 
     if (enrollError || !enrollment) {
       res.status(404).json({ error: 'Enrollment not found' })
       return
+    }
+
+    // Never open a second payment for a child who already paid for this group
+    // (this track again, or the other one). The first payment stays "waiting for
+    // approval" until the academy confirms it, which is when people tried again.
+    {
+      const rootId = enrollment.activity.parent_activity_id || enrollment.activity.id
+      const { data: family } = await supabase.from('activities').select('id').or(`id.eq.${rootId},parent_activity_id.eq.${rootId}`)
+      const { data: related } = await supabase.from('enrollments').select('id, status')
+        .eq('player_id', enrollment.player_id)
+        .in('activity_id', (family || []).map(a => a.id).concat(enrollment.activity.id))
+        .in('status', ['pending', 'active'])
+      const relatedIds = (related || []).map(r => r.id)
+      const { data: subs } = relatedIds.length
+        ? await supabase.from('billing_subscriptions').select('status').in('enrollment_id', relatedIds)
+        : { data: [] }
+      const alreadyPaid = (related || []).some(r => r.status === 'active') || (subs || []).some(s => firstPaymentDone(s.status))
+      if (alreadyPaid) {
+        res.status(409).json({ error: 'התשלום על ההרשמה הזו כבר התקבל והיא ממתינה לאישור שלנו — אין צורך לשלם שוב. לשינוי מסלול (פעם או פעמיים בשבוע) פנו אלינו.' })
+        return
+      }
     }
 
     const { data: profile } = await supabase

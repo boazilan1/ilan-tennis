@@ -110,3 +110,10 @@ export function computeBillingPlan(registrationDate, daysOfWeek, monthlyPrice) {
 export function formatDateISO(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
+
+// A billing subscription leaves 'pending_first_payment' only once Morning's
+// webhook confirms the first (one-time) payment, so any other live status
+// means the customer has already paid and is just waiting for admin approval.
+export function firstPaymentDone(subscriptionStatus) {
+  return ['active', 'paused', 'failed'].includes(subscriptionStatus)
+}

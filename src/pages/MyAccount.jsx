@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import Icon from '../components/Icon'
 import { formatTimeRange } from '../lib/timeRange'
 import { withoutTrackedChildren } from '../lib/givatZeev'
+import { firstPaymentDone } from '../lib/billing'
 
 const DAYS_HE = { sunday: 'ראשון', monday: 'שני', tuesday: 'שלישי', wednesday: 'רביעי', thursday: 'חמישי', friday: 'שישי', saturday: 'שבת' }
 
@@ -12,7 +13,12 @@ function formatDateHe(dateStr) {
   return new Date(dateStr).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: 'numeric' })
 }
 
-const statusLabel = { active: { label: 'פעיל', color: '#16a34a', bg: '#dcfce7' }, pending: { label: 'ממתין לתשלום', color: '#b45309', bg: '#fef3c7' } }
+const statusLabel = {
+  active: { label: 'פעיל', color: '#16a34a', bg: '#dcfce7' },
+  pending: { label: 'ממתין לתשלום', color: '#b45309', bg: '#fef3c7' },
+  // paid, but the enrollment only turns active once the academy confirms it
+  paid: { label: 'שולם — ממתין לאישור', color: '#0e7490', bg: '#ecfeff' },
+}
 
 export default function MyAccount() {
   const { user, loading: authLoading } = useAuth()
@@ -45,7 +51,7 @@ export default function MyAccount() {
     async function loadDetail() {
       setLoadingDetail(true)
       const [enrollRes, bookRes, attRes, pkgRes] = await Promise.all([
-        supabase.from('enrollments').select('id, status, activity:activities(id, name, time, days_of_week, day_of_week)')
+        supabase.from('enrollments').select('id, status, activity:activities(id, name, time, days_of_week, day_of_week), billing:billing_subscriptions(status)')
           .eq('player_id', selectedPlayerId).in('status', ['active', 'pending']),
         supabase.from('private_slot_bookings').select('id, status, payment_method, slot:private_slots(slot_date, time, duration_minutes, price, location:locations(name))')
           .eq('player_id', selectedPlayerId).in('status', ['active', 'pending']),
@@ -134,7 +140,8 @@ export default function MyAccount() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {enrollments.map(e => {
                     const days = (e.activity?.days_of_week?.length ? e.activity.days_of_week : [e.activity?.day_of_week]).filter(Boolean)
-                    const st = statusLabel[e.status] || statusLabel.pending
+                    const paidAwaitingApproval = e.status === 'pending' && firstPaymentDone(e.billing?.status)
+                    const st = paidAwaitingApproval ? statusLabel.paid : (statusLabel[e.status] || statusLabel.pending)
                     return (
                       <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
                         <div>
